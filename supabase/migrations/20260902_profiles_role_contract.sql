@@ -17,6 +17,10 @@ alter table public.profiles
       'ADMINISTRADOR',
       'DIRECTOR',
       'COORDINADOR',
+      'COORDINADOR_GENERAL',
+      'DIGITADOR',
+      'TESTIGO',
+      'CONSULTOR',
       'USUARIO',
       'USUARIO_LIMITADO'
     )

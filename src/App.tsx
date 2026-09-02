@@ -308,7 +308,10 @@ export default function App() {
 
     // Role-based permission check
     const userRole = authUser.role;
-    const isAllowed = isViewAllowed(userRole, view) && isViewAllowedForModule(authUser.moduleName, view);
+    const hasFullCampaignAccess = userRole === 'administrador' || userRole === 'candidato';
+    const isCampaignView = view !== 'global_admin' && view !== 'saas_admin';
+    const isAllowed = (hasFullCampaignAccess && isCampaignView)
+      || (isViewAllowed(userRole, view) && isViewAllowedForModule(authUser.moduleName, view));
 
     if (isAllowed) {
       setCurrentView(view);

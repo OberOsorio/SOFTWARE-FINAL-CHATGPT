@@ -166,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [authUser]);
 
   const hasPermission = (permId: string) => {
-    if (userRole === 'superadmin' || userRole === 'candidato' || userRole === 'auditor') {
+    if (userRole === 'superadmin' || userRole === 'administrador' || userRole === 'candidato' || userRole === 'auditor') {
       return true;
     }
     if (perms.length === 0) return true;

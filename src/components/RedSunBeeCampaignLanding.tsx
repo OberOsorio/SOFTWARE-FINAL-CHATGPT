@@ -121,7 +121,7 @@ export const RedSunBeeCampaignLanding: React.FC<RedSunBeeCampaignLandingProps> =
     const timer = window.setTimeout(() => {
       sessionStorage.setItem('cg_cinematic_intro_v1', 'seen');
       setShowCinematicIntro(false);
-    }, 1250);
+    }, 2500);
     return () => window.clearTimeout(timer);
   }, [showCinematicIntro]);
 
