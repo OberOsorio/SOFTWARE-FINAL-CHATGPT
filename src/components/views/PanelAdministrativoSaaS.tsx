@@ -565,7 +565,7 @@ export const PanelAdministrativoSaaS: React.FC<PanelAdministrativoSaaSProps> = (
   ];
 
   return (
-    <div className="flex h-full min-h-[90vh] bg-[#020813] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
+    <div className="responsive-view flex h-full min-h-[90dvh] w-full min-w-0 bg-[#020813] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
       {/* Toast notification banner */}
       <AnimatePresence>
         {actionSuccessMessage && (

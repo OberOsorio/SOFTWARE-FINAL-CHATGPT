@@ -134,7 +134,7 @@ export const GlobalAdminLayout: React.FC<GlobalAdminLayoutProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
+    <div className="global-admin-shell min-h-[100dvh] w-full min-w-0 bg-[#020617] text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
       {/* Top Navbar */}
       <header className="sticky top-0 z-40 bg-slate-950/90 border-b border-slate-800/90 backdrop-blur-xl px-4 sm:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -311,7 +311,7 @@ export const GlobalAdminLayout: React.FC<GlobalAdminLayoutProps> = ({
         )}
 
         {/* Content View Body */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 bg-[#020617]">
+        <main className="app-main min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8 bg-[#020617]">
           <div className="w-full max-w-7xl mx-auto">
             {renderActiveView()}
           </div>

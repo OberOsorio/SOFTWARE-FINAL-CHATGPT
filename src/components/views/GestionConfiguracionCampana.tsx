@@ -773,16 +773,16 @@ export const GestionConfiguracionCampana: React.FC<GestionConfiguracionCampanaPr
               </div>
 
               {/* 1.2 Fecha Elección */}
-              <div className="p-3 bg-[#030d1f] rounded-xl border border-cyan-500/20 space-y-1.5">
+              <div className="min-w-0 overflow-hidden p-3 bg-[#030d1f] rounded-xl border border-cyan-500/20 space-y-1.5">
                 <label className="block font-extrabold text-cyan-200">Fecha de las Elecciones (Día E) *</label>
-                <div className="relative pt-1">
+                <div className="relative min-w-0 overflow-hidden pt-1">
                   <Calendar className="w-4 h-4 text-emerald-400 absolute left-3 top-3.5" />
                   <input
                     type="date"
                     required
                     value={activeDossier.fechaEleccion}
                     onChange={(e) => updateDossier({ fechaEleccion: e.target.value })}
-                    className="w-full bg-[#051833] border border-cyan-500/30 rounded-xl pl-9 pr-3 py-2 text-white font-bold font-mono focus:outline-none focus:border-emerald-400"
+                    className="block w-full min-w-0 max-w-full box-border bg-[#051833] border border-cyan-500/30 rounded-xl pl-9 pr-3 py-2 text-white font-bold font-mono focus:outline-none focus:border-emerald-400"
                   />
                 </div>
                 <p className="text-[10px] text-slate-400">Fecha oficial fijada por la Registraduría / CNE.</p>

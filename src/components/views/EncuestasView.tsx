@@ -178,7 +178,7 @@ export const EncuestasView: React.FC<EncuestasViewProps> = ({ onSelectView, auth
   });
 
   return (
-    <div className="min-h-[calc(100vh-60px)] bg-[#030712] text-slate-100 p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="responsive-view min-h-[calc(100dvh-60px)] w-full min-w-0 bg-[#030712] text-slate-100 p-3 sm:p-4 md:p-8 space-y-4 sm:space-y-6 max-w-7xl mx-auto overflow-x-hidden">
       {loading && <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-200">Cargando encuesta y respuestas reales…</div>}
       {dataError && <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-200 flex justify-between gap-3"><span>{dataError}</span><button type="button" onClick={() => void loadRealSurveys()} className="font-bold text-cyan-300">Reintentar</button></div>}
       
@@ -192,7 +192,7 @@ export const EncuestasView: React.FC<EncuestasViewProps> = ({ onSelectView, auth
           </div>
           
           {/* Daily Goal card */}
-          <div className="bg-[#041733]/90 border border-blue-500/30 rounded-2xl p-4 shrink-0 shadow-lg min-w-[220px] space-y-2.5">
+          <div className="bg-[#041733]/90 border border-blue-500/30 rounded-2xl p-4 w-full md:w-auto md:min-w-[220px] shrink-0 shadow-lg space-y-2.5">
             <div className="flex justify-between items-center text-xs">
               <span className="text-slate-400 font-semibold">Meta de Hoy</span>
               <span className="font-mono font-bold text-blue-300">{metaDiaria > 0 ? `${completadasHoy} / ${metaDiaria}` : completadasHoy} encuestas</span>
@@ -472,7 +472,7 @@ export const EncuestasView: React.FC<EncuestasViewProps> = ({ onSelectView, auth
               </div>
 
               {/* Select filters */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 block mb-1">Comuna</label>
                   <select
@@ -602,7 +602,7 @@ export const EncuestasView: React.FC<EncuestasViewProps> = ({ onSelectView, auth
             </div>
 
             <div className="bg-[#020712]/60 rounded-2xl p-4 border border-slate-850 text-xs space-y-3.5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <span className="text-[10px] text-slate-500 block uppercase font-semibold">Ciudadano</span>
                   <span className="text-white font-bold">{nombre.trim() || 'Anónimo'}</span>
@@ -613,7 +613,7 @@ export const EncuestasView: React.FC<EncuestasViewProps> = ({ onSelectView, auth
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-800/60">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800/60">
                 <div>
                   <span className="text-[10px] text-slate-500 block uppercase font-semibold">P1: Intención de Voto</span>
                   <span className="text-blue-300 font-bold">{intencionVoto}</span>
@@ -624,7 +624,7 @@ export const EncuestasView: React.FC<EncuestasViewProps> = ({ onSelectView, auth
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-800/60">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800/60">
                 <div>
                   <span className="text-[10px] text-slate-500 block uppercase font-semibold">P3: Preocupación Principal</span>
                   <span className="text-slate-300 font-semibold">{preocupacion}</span>
@@ -635,7 +635,7 @@ export const EncuestasView: React.FC<EncuestasViewProps> = ({ onSelectView, auth
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-slate-800/60 font-medium">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-800/60 font-medium">
                 <div>
                   <span className="text-[10px] text-slate-500 block uppercase font-semibold">P5: Edad</span>
                   <span className="text-white font-bold">{edad} años</span>
@@ -651,7 +651,7 @@ export const EncuestasView: React.FC<EncuestasViewProps> = ({ onSelectView, auth
               </div>
             </div>
 
-            <div className="flex gap-3 justify-end pt-2">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 justify-end pt-2 [&>button]:w-full sm:[&>button]:w-auto">
               <button
                 type="button"
                 onClick={() => setShowConfirmModal(false)}

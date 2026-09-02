@@ -1645,7 +1645,7 @@ export const GestionEstrategica: React.FC<GestionEstrategicaProps> = ({
   };
 
   return (
-    <div className="min-h-[calc(100vh-60px)] bg-[#071927] text-slate-100 p-4 md:p-8 space-y-6">
+    <div className="responsive-view min-h-[calc(100dvh-60px)] w-full min-w-0 bg-[#071927] text-slate-100 p-3 sm:p-4 md:p-8 space-y-4 sm:space-y-6 overflow-x-hidden">
       
 
 
@@ -2298,13 +2298,13 @@ export const GestionEstrategica: React.FC<GestionEstrategicaProps> = ({
                 </div>
 
                 {/* Filter Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#081d38] p-3 rounded-2xl border border-cyan-500/20 text-xs">
-                  <div className="flex items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 overflow-hidden bg-[#081d38] p-3 rounded-2xl border border-cyan-500/20 text-xs">
+                  <div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
                     <span className="font-bold text-slate-300">Filtrar por Comuna/Sector:</span>
                     <select
                       value={selectedComunaFilter}
                       onChange={(e) => setSelectedComunaFilter(e.target.value)}
-                      className="bg-[#051325] border border-cyan-500/30 rounded-xl px-3 py-1.5 text-white outline-none focus:border-cyan-400 font-medium"
+                      className="block w-full min-w-0 max-w-full box-border bg-[#051325] border border-cyan-500/30 rounded-xl px-3 py-1.5 text-white outline-none focus:border-cyan-400 font-medium sm:w-auto sm:max-w-[20rem]"
                     >
                       <option value="Todos">Todas las Comunas / Corregimientos</option>
                       <option value="Comuna 1 - Popular">Comuna 1 - Popular</option>
@@ -2912,13 +2912,13 @@ export const GestionEstrategica: React.FC<GestionEstrategicaProps> = ({
               </div>
 
               {/* Filter Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#081d38] p-3 rounded-2xl border border-cyan-500/20 text-xs">
-                <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 overflow-hidden bg-[#081d38] p-3 rounded-2xl border border-cyan-500/20 text-xs">
+                <div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
                   <span className="font-bold text-slate-300">Filtrar por Comuna/Sector:</span>
                   <select
                     value={selectedComunaFilter}
                     onChange={(e) => setSelectedComunaFilter(e.target.value)}
-                    className="bg-[#051325] border border-cyan-500/30 rounded-xl px-3 py-1.5 text-white outline-none focus:border-cyan-400 font-medium"
+                    className="block w-full min-w-0 max-w-full box-border bg-[#051325] border border-cyan-500/30 rounded-xl px-3 py-1.5 text-white outline-none focus:border-cyan-400 font-medium sm:w-auto sm:max-w-[20rem]"
                   >
                     <option value="Todos">Todas las Comunas / Corregimientos</option>
                     <option value="Comuna 1 - Popular">Comuna 1 - Popular</option>

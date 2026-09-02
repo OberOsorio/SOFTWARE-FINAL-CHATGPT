@@ -1982,10 +1982,10 @@ export const ModuloAdministrativo: React.FC<ModuloAdministrativoProps> = ({
   }, [activeTab]);
 
   return (
-    <div className="min-h-[calc(100vh-60px)] bg-[#030712] text-slate-100 relative">
+    <div className="responsive-view min-h-[calc(100dvh-60px)] w-full min-w-0 bg-[#030712] text-slate-100 relative overflow-x-hidden">
       {/* Floating Success Toast */}
       {actionSuccessMessage && (
-        <div className="fixed top-24 right-6 z-50 animate-bounce duration-500 bg-[#022c22]/95 border border-emerald-500/50 backdrop-blur-md rounded-xl p-4 shadow-[0_0_25px_rgba(16,185,129,0.35)] flex items-center gap-3 max-w-sm text-slate-100">
+        <div className="fixed top-20 sm:top-24 left-3 right-3 sm:left-auto sm:right-6 z-50 animate-bounce duration-500 bg-[#022c22]/95 border border-emerald-500/50 backdrop-blur-md rounded-xl p-3 sm:p-4 shadow-[0_0_25px_rgba(16,185,129,0.35)] flex items-center gap-3 sm:max-w-sm text-slate-100">
           <div className="bg-emerald-500/20 p-2 rounded-lg text-emerald-400">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />

@@ -527,7 +527,7 @@ export default function App() {
 
   // Render Main Dashboard Layout Shell
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#030712] text-slate-100 selection:bg-cyan-500 selection:text-black">
+    <div className="app-shell h-[100dvh] min-h-0 w-full min-w-0 overflow-hidden flex flex-col bg-[#030712] text-slate-100 selection:bg-cyan-500 selection:text-black">
       {/* Main Workspace: Sidebar + Dynamic View Content */}
       <div className="flex-1 flex h-full overflow-hidden relative">
         {/* Left Navigation Sidebar */}
@@ -548,7 +548,7 @@ export default function App() {
         />
 
         {/* Main Content Area with Smooth Motion Transitions */}
-        <main ref={mainContainerRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-[#040e21] via-[#020817] to-[#01040a] relative custom-scrollbar">
+        <main ref={mainContainerRef} className="app-main min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#040e21] via-[#020817] to-[#01040a] relative custom-scrollbar">
           {/* Top Mobile Bar for fast drawer access on phones & tablets */}
           <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 bg-[#051329]/95 border-b border-cyan-500/20 backdrop-blur-md">
             <button

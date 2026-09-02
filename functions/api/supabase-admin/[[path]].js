@@ -7,6 +7,10 @@ const JSON_HEADERS = {
 const GLOBAL_OWNER_ROLES = ['SUPERADMIN', 'GLOBAL_ADMIN'];
 const MANAGER_ROLES = [...GLOBAL_OWNER_ROLES, 'ADMIN_CLIENTE', 'ADMINISTRADOR'];
 const ACTIVE_STATUSES = ['ACTIVE', 'ACTIVO'];
+const E14_OCR_ROLES = [
+  ...MANAGER_ROLES,
+  'DIRECTOR', 'COORDINADOR', 'USUARIO', 'USUARIO_LIMITADO', 'TESTIGO'
+];
 
 function json(payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
@@ -952,6 +956,102 @@ async function deleteCampaignAndExclusiveUsers(request, configuration, campaignI
   });
 }
 
+function safeOcrInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 && number <= 999999 ? number : null;
+}
+
+async function analyzeE14Image(request, configuration, env) {
+  const requester = await verifyRequester(request, configuration, E14_OCR_ROLES);
+  if (requester.error) return requester.error;
+
+  const geminiApiKey = clean(env.GEMINI_API_KEY);
+  if (!env.AI && !geminiApiKey) {
+    return json({ error: 'El servicio de lectura E-14 aún no tiene configurado un motor visual.' }, 503);
+  }
+
+  const parsed = await parseRequestBody(request);
+  if (parsed.error) return parsed.error;
+  const imageData = String(parsed.body?.imageData || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
+  const mimeType = String(parsed.body?.mimeType || 'image/jpeg').toLowerCase();
+  const mesa = String(parsed.body?.mesa || '').trim().slice(0, 120);
+  if (!/^image\/(jpeg|png|webp)$/.test(mimeType) || !/^[a-zA-Z0-9+/=]+$/.test(imageData)) {
+    return json({ error: 'La fotografía enviada no tiene un formato válido.' }, 400);
+  }
+  if (imageData.length > 19_000_000) {
+    return json({ error: 'La fotografía es demasiado grande. Tome una foto con menor resolución.' }, 413);
+  }
+
+  const prompt = `Analiza esta fotografía como un lector electoral estricto del formulario colombiano E-14${mesa ? ` de ${mesa}` : ''}. Extrae solamente cifras claramente visibles; jamás inventes, completes o corrijas números dudosos. Ordena candidateVotes según el orden vertical en el acta. Distingue votos en blanco, votos nulos y tarjetas no marcadas. validDocument debe ser false si no es un E-14 o si la imagen no permite una lectura responsable. confidence es un porcentaje de 0 a 100. Devuelve exclusivamente JSON válido con esta estructura exacta: {"validDocument":boolean,"message":string,"candidateVotes":[{"name":string,"votes":number|null}],"blankVotes":number|null,"nullVotes":number|null,"unmarkedVotes":number|null,"totalVotes":number|null,"confidence":number,"warnings":string[]}.`;
+  let responseText = '';
+
+  if (env.AI) {
+    try {
+      const aiResult = await env.AI.run('@cf/moondream/moondream3.1-9B-A2B', {
+        task: 'query',
+        image: `data:${mimeType};base64,${imageData}`,
+        question: prompt,
+        reasoning: false,
+        temperature: 0,
+        max_tokens: 2500,
+        stream: false,
+      });
+      responseText = String(aiResult?.answer || '');
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'e14_ocr_workers_ai_failed', message: error instanceof Error ? error.message : String(error) }));
+      return json({ error: 'El lector E-14 no pudo procesar la imagen en este momento.' }, 502);
+    }
+  } else {
+    const model = clean(env.GEMINI_MODEL) || 'gemini-2.5-flash';
+    const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-goog-api-key': geminiApiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: imageData } }, { text: prompt }] }],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+      }),
+    });
+    const upstreamText = await upstream.text();
+    let upstreamPayload = {};
+    try { upstreamPayload = upstreamText ? JSON.parse(upstreamText) : {}; } catch { upstreamPayload = {}; }
+    if (!upstream.ok) {
+      console.error(JSON.stringify({ event: 'e14_ocr_provider_failed', status: upstream.status }));
+      return json({ error: 'El lector E-14 no pudo procesar la imagen en este momento.' }, 502);
+    }
+    responseText = String(upstreamPayload?.candidates?.[0]?.content?.parts?.find?.((part) => part?.text)?.text || '');
+  }
+
+  responseText = responseText
+    .replace(/^```json\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  let result;
+  try { result = JSON.parse(responseText); } catch {
+    return json({ error: 'El lector no devolvió resultados verificables. Tome nuevamente la fotografía.' }, 502);
+  }
+
+  const candidateVotes = Array.isArray(result.candidateVotes)
+    ? result.candidateVotes.slice(0, 100).map((candidate) => ({
+        name: String(candidate?.name || 'Candidato sin nombre').trim().slice(0, 160),
+        votes: safeOcrInteger(candidate?.votes),
+      }))
+    : [];
+  return json({
+    validDocument: result.validDocument === true,
+    message: String(result.message || '').slice(0, 500),
+    candidateVotes,
+    blankVotes: safeOcrInteger(result.blankVotes),
+    nullVotes: safeOcrInteger(result.nullVotes),
+    unmarkedVotes: safeOcrInteger(result.unmarkedVotes),
+    totalVotes: safeOcrInteger(result.totalVotes),
+    confidence: Math.max(0, Math.min(100, Number(result.confidence) || 0)),
+    warnings: Array.isArray(result.warnings) ? result.warnings.slice(0, 10).map((warning) => String(warning).slice(0, 300)) : [],
+  });
+}
+
 function routeSegments(url) {
   const pathname = new URL(url).pathname;
   const rawSegments = pathname.split('/').filter(Boolean);
@@ -979,7 +1079,8 @@ export async function onRequest(context) {
   const isPasswordReset = segments.length === 3 &&
     segments[0] === 'campaign-user' && segments[2] === 'reset-password';
   const isCampaignDelete = segments.length === 2 && segments[0] === 'campaigns';
-  const knownRoute = isCampaignUser || isManagedUser || isPasswordReset || isCampaignDelete;
+  const isE14Ocr = segments.length === 1 && segments[0] === 'e14-ocr';
+  const knownRoute = isCampaignUser || isManagedUser || isPasswordReset || isCampaignDelete || isE14Ocr;
 
   if (!knownRoute) return json({ error: 'Ruta administrativa no disponible.' }, 404);
 
@@ -999,6 +1100,7 @@ export async function onRequest(context) {
     if (isCampaignDelete && method === 'DELETE') {
       return deleteCampaignAndExclusiveUsers(request, configuration, segments[1]);
     }
+    if (isE14Ocr && method === 'POST') return analyzeE14Image(request, configuration, env);
 
     const allow = isCampaignDelete ? 'DELETE' : 'POST';
     return json({ error: 'Método HTTP no permitido para esta ruta.' }, 405, { allow });

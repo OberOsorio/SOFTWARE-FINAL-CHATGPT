@@ -1058,15 +1058,15 @@ export const AnalisisDatosView: React.FC<{
           </div>
 
           {/* RECOMMENDATIONS STATUS COUNTERS */}
-          <div className="flex items-center gap-3 text-xs font-bold border-b border-indigo-500/20 pb-2">
-            <span className="text-slate-400 font-extrabold text-[11px] uppercase">Resumen de Recomendaciones:</span>
-            <span className="px-3 py-1 bg-amber-950 text-amber-300 border border-amber-500/40 rounded-full">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3 text-xs font-bold border-b border-indigo-500/20 pb-2">
+            <span className="w-full text-slate-400 font-extrabold text-[11px] uppercase sm:w-auto">Resumen de Recomendaciones:</span>
+            <span className="max-w-full whitespace-nowrap px-3 py-1 bg-amber-950 text-amber-300 border border-amber-500/40 rounded-full">
               {pendingCount} Pendientes
             </span>
-            <span className="px-3 py-1 bg-cyan-950 text-cyan-300 border border-cyan-500/40 rounded-full">
+            <span className="max-w-full whitespace-nowrap px-3 py-1 bg-cyan-950 text-cyan-300 border border-cyan-500/40 rounded-full">
               {inProgressCount} En Proceso
             </span>
-            <span className="px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded-full">
+            <span className="max-w-full whitespace-nowrap px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded-full">
               {doneCount} Implementadas
             </span>
           </div>

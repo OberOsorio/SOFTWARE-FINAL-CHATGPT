@@ -153,6 +153,11 @@ export const TestigoCampoView: React.FC<TestigoCampoViewProps> = ({ onSelectView
   // 3. Escrutinio State
   const [ocrEscaneando, setOcrEscaneando] = useState(false);
   const [ocrCompletado, setOcrCompletado] = useState(false);
+  const [ocrPhotoUrl, setOcrPhotoUrl] = useState('');
+  const [ocrError, setOcrError] = useState('');
+  const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+  const [ocrDetectedCandidates, setOcrDetectedCandidates] = useState<Array<{ name: string; votes: number | null }>>([]);
+  const e14CameraInputRef = useRef<HTMLInputElement | null>(null);
   const [e14Transmitido, setE14Transmitido] = useState(false);
   const [votosNuestros, setVotosNuestros] = useState<number | ''>('');
   const [votosCandidatoB, setVotosCandidatoB] = useState<number | ''>('');
@@ -437,10 +442,92 @@ export const TestigoCampoView: React.FC<TestigoCampoViewProps> = ({ onSelectView
     setNuevoVotosAcumulados('');
   };
 
-  const simularOcrE14 = () => {
-    setOcrEscaneando(false);
+  const prepareE14Image = (file: File) => new Promise<{ dataUrl: string; base64: string; mimeType: string }>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No fue posible leer la fotografía seleccionada.'));
+    reader.onload = () => {
+      const source = String(reader.result || '');
+      const image = new Image();
+      image.onerror = () => reject(new Error('La imagen no tiene un formato compatible.'));
+      image.onload = () => {
+        const maxSide = 1800;
+        const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) return reject(new Error('No fue posible preparar la fotografía.'));
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        resolve({ dataUrl, base64: dataUrl.split(',')[1] || '', mimeType: 'image/jpeg' });
+      };
+      image.src = source;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const openE14Camera = () => {
+    setOcrError('');
+    if (e14CameraInputRef.current) e14CameraInputRef.current.value = '';
+    e14CameraInputRef.current?.click();
+  };
+
+  const handleE14Photo = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setOcrError('Seleccione o tome una fotografía válida del formulario E-14.');
+      return;
+    }
+
+    setOcrEscaneando(true);
     setOcrCompletado(false);
-    alert('La lectura automática del E-14 requiere un servicio OCR configurado. Los resultados deben registrarse manualmente hasta completar esa conexión.');
+    setOcrError('');
+    setOcrConfidence(null);
+    setOcrDetectedCandidates([]);
+    try {
+      const prepared = await prepareE14Image(file);
+      setOcrPhotoUrl(prepared.dataUrl);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session?.access_token) {
+        throw new Error('La sesión venció. Inicie sesión nuevamente para analizar el E-14.');
+      }
+
+      const response = await fetch('/api/supabase-admin/e14-ocr', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          imageData: prepared.base64,
+          mimeType: prepared.mimeType,
+          mesa: puestoAsignado.mesa,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'No fue posible analizar la fotografía del E-14.');
+      if (!result.validDocument) throw new Error(result.message || 'La fotografía no permite identificar un formulario E-14 legible.');
+
+      const candidates = Array.isArray(result.candidateVotes) ? result.candidateVotes.slice(0, 3) : [];
+      const numericOrEmpty = (value: unknown): number | '' => Number.isInteger(value) && Number(value) >= 0 ? Number(value) : '';
+      setVotosNuestros(numericOrEmpty(candidates[0]?.votes));
+      setVotosCandidatoB(numericOrEmpty(candidates[1]?.votes));
+      setVotosCandidatoC(numericOrEmpty(candidates[2]?.votes));
+      setVotosBlanco(numericOrEmpty(result.blankVotes));
+      const nullVotes = numericOrEmpty(result.nullVotes);
+      const unmarkedVotes = numericOrEmpty(result.unmarkedVotes);
+      setVotosNulos(nullVotes === '' && unmarkedVotes === '' ? '' : (Number(nullVotes) || 0) + (Number(unmarkedVotes) || 0));
+      setOcrDetectedCandidates(candidates.map((candidate: any, index: number) => ({
+        name: String(candidate?.name || `Candidato ${index + 1}`),
+        votes: numericOrEmpty(candidate?.votes) === '' ? null : Number(candidate.votes),
+      })));
+      setOcrConfidence(typeof result.confidence === 'number' ? result.confidence : null);
+      setOcrCompletado(true);
+    } catch (error: any) {
+      setOcrError(error?.message || 'No fue posible completar la lectura del E-14.');
+    } finally {
+      setOcrEscaneando(false);
+    }
   };
 
   const handleE14Transmit = () => {
@@ -479,7 +566,7 @@ export const TestigoCampoView: React.FC<TestigoCampoViewProps> = ({ onSelectView
     (Number(votosNulos) || 0);
 
   return (
-    <div className="min-h-[calc(100vh-60px)] bg-[#030712] text-slate-100 p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="responsive-view min-h-[calc(100dvh-60px)] w-full min-w-0 bg-[#030712] text-slate-100 p-3 sm:p-4 md:p-8 space-y-4 sm:space-y-6 max-w-7xl mx-auto overflow-x-hidden">
       
       {/* Top Banner: Assigned Voting Table details */}
       <div className={`rounded-3xl p-5 md:p-6 text-white shadow-xl relative overflow-hidden ${puestoAsignado.id ? 'bg-gradient-to-r from-[#0b1d38] via-[#0d2a4a] to-[#047857]' : 'bg-[#071426] border border-slate-800'}`}>
@@ -605,15 +692,15 @@ export const TestigoCampoView: React.FC<TestigoCampoViewProps> = ({ onSelectView
                     </div>
                   </div>
                 ) : (
-                  <form onSubmit={handleAperturaSubmit} className="space-y-5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
+                  <form onSubmit={handleAperturaSubmit} className="w-full min-w-0 space-y-5">
+                    <div className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="min-w-0 space-y-2 overflow-hidden">
                         <label className="text-xs font-bold text-slate-300">Hora Oficial de Apertura</label>
                         <input
                           type="time"
                           value={horaApertura}
                           onChange={(e) => setHoraApertura(e.target.value)}
-                          className="w-full bg-[#020a17] border border-slate-700/60 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+                          className="block w-full min-w-0 max-w-full box-border bg-[#020a17] border border-slate-700/60 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
                           required
                         />
                       </div>
@@ -965,6 +1052,14 @@ export const TestigoCampoView: React.FC<TestigoCampoViewProps> = ({ onSelectView
 
                   {/* Right Column: Simulated OCR Camera */}
                   <div className="bg-[#020a17] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                    <input
+                      ref={e14CameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="sr-only"
+                      onChange={(event) => void handleE14Photo(event.target.files?.[0])}
+                    />
                     <div className="space-y-1.5">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Escáner E-14 de Campaña</h4>
                       <p className="text-[11px] text-slate-500 leading-normal">
@@ -973,7 +1068,8 @@ export const TestigoCampoView: React.FC<TestigoCampoViewProps> = ({ onSelectView
                     </div>
 
                     {ocrEscaneando ? (
-                      <div className="flex-1 flex flex-col items-center justify-center py-12 space-y-4 bg-slate-900/60 border border-slate-800 border-dashed rounded-xl relative overflow-hidden">
+                      <div className="flex-1 min-h-64 flex flex-col items-center justify-center py-12 space-y-4 bg-slate-900/60 border border-slate-800 border-dashed rounded-xl relative overflow-hidden">
+                        {ocrPhotoUrl && <img src={ocrPhotoUrl} alt="Formulario E-14 capturado" className="absolute inset-0 w-full h-full object-cover opacity-30" />}
                         {/* Simulated rotating scanlines */}
                         <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500 shadow-lg shadow-emerald-500/70 animate-bounce" />
                         <Camera className="w-8 h-8 text-emerald-400 animate-pulse" />
@@ -986,14 +1082,27 @@ export const TestigoCampoView: React.FC<TestigoCampoViewProps> = ({ onSelectView
                         </div>
                       </div>
                     ) : ocrCompletado ? (
-                      <div className="flex-1 flex flex-col items-center justify-center py-8 space-y-3 bg-emerald-950/20 border border-emerald-500/20 border-dashed rounded-xl">
+                      <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-3 bg-emerald-950/20 border border-emerald-500/20 border-dashed rounded-xl">
+                        {ocrPhotoUrl && <img src={ocrPhotoUrl} alt="Formulario E-14 analizado" className="w-full max-h-56 object-contain rounded-lg border border-emerald-500/20 bg-black" />}
                         <Check className="w-8 h-8 text-emerald-400 bg-emerald-950 border border-emerald-500/40 p-1.5 rounded-full" />
                         <div className="text-center">
                           <span className="text-xs text-white font-extrabold block">Lectura OCR Completada</span>
-                          <span className="text-[10px] text-emerald-400 font-semibold font-mono block mt-0.5">98% confianza del escáner</span>
+                          <span className="text-[10px] text-emerald-400 font-semibold font-mono block mt-0.5">
+                            {ocrConfidence === null ? 'Cifras extraídas para revisión' : `${Math.round(ocrConfidence)}% de confianza estimada`}
+                          </span>
                         </div>
+                        {ocrDetectedCandidates.length > 0 && (
+                          <div className="w-full rounded-lg bg-slate-950/70 border border-slate-800 p-2 text-[10px] text-slate-300 space-y-1">
+                            {ocrDetectedCandidates.map((candidate, index) => (
+                              <div key={`${candidate.name}-${index}`} className="flex justify-between gap-3">
+                                <span className="truncate">{candidate.name}</span>
+                                <strong className="font-mono text-white">{candidate.votes ?? 'Revisar'}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <button 
-                          onClick={simularOcrE14}
+                          onClick={openE14Camera}
                           className="text-[11px] font-bold text-teal-400 hover:text-teal-300 underline mt-2"
                         >
                           Volver a escanear
@@ -1001,15 +1110,21 @@ export const TestigoCampoView: React.FC<TestigoCampoViewProps> = ({ onSelectView
                       </div>
                     ) : (
                       <button
-                        onClick={simularOcrE14}
+                        onClick={openE14Camera}
                         className="flex-1 flex flex-col items-center justify-center py-12 space-y-3 bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800 hover:border-slate-700 border-dashed rounded-xl transition-all cursor-pointer group"
                       >
                         <div className="p-3 bg-slate-800 rounded-xl group-hover:bg-slate-700/60 text-slate-400 group-hover:text-white transition-all">
                           <Camera className="w-6 h-6" />
                         </div>
                         <span className="text-xs font-bold text-slate-300 group-hover:text-white">Capturar Foto E-14</span>
-                        <span className="text-[10px] text-slate-500 font-mono">Simulador de Lectura Inteligente</span>
+                        <span className="text-[10px] text-slate-500 font-mono">Cámara trasera · Lectura inteligente</span>
                       </button>
+                    )}
+
+                    {ocrError && (
+                      <div role="alert" className="p-3 rounded-xl border border-rose-500/40 bg-rose-950/30 text-[11px] leading-relaxed text-rose-200">
+                        {ocrError}
+                      </div>
                     )}
 
                     <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 text-[11px] text-slate-400 leading-normal flex items-start gap-2">

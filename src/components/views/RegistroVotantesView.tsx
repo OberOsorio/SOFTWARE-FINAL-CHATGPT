@@ -1876,7 +1876,7 @@ _Documento Oficial de Auditoría Electoral - Campaña Ganadora AI_`;
                   <select
                     value={liderFilter}
                     onChange={(e) => setLiderFilter(e.target.value)}
-                    className="bg-slate-900 border border-teal-500/40 rounded-xl px-2.5 py-1.5 text-xs text-teal-300 font-bold outline-none cursor-pointer"
+                    className="block w-full min-w-0 max-w-full box-border bg-slate-900 border border-teal-500/40 rounded-xl px-2.5 py-1.5 text-xs text-teal-300 font-bold outline-none cursor-pointer sm:w-auto sm:max-w-[18rem]"
                   >
                     <option value="Todas">👥 Todos los Líderes</option>
                     <option value="Mis Votantes">📌 Mis Votantes ({activeOperator})</option>

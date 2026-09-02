@@ -282,7 +282,7 @@ export const GestionTerritorial: React.FC<GestionTerritorialProps> = ({
   };
 
   return (
-    <div className="min-h-[calc(100vh-60px)] bg-[#020712] text-white p-4 md:p-6 space-y-4">
+    <div className="responsive-view min-h-[calc(100dvh-60px)] w-full min-w-0 bg-[#020712] text-white p-3 sm:p-4 md:p-6 space-y-4 overflow-x-hidden">
       {activeSubTab === 'registro' ? (
         <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center"><div className="h-8 w-8 rounded-full border-2 border-cyan-500/30 border-t-cyan-400 animate-spin" /></div>}>
         <RegistroVotantesView onSelectView={onSelectView} authUser={authUser} />
