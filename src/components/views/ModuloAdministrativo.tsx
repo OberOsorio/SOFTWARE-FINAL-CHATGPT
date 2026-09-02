@@ -617,19 +617,22 @@ export const ModuloAdministrativo: React.FC<ModuloAdministrativoProps> = ({
       if (!ownerId) throw new Error('Debes iniciar sesión para administrar los usuarios de campaña.');
       const { data: ownerProfile, error: ownerError } = await supabase
         .from('profiles')
-        .select('client_id')
+        .select('client_id,campaign_id')
         .eq('id', ownerId)
         .maybeSingle();
       if (ownerError) throw ownerError;
+      const campaignId = ownerProfile?.campaign_id;
       const campaignClientId = ownerProfile?.client_id || authUser?.clientId;
       let profilesQuery = supabase
         .from('profiles')
-        .select('id,email,display_name,role,status,allowed_modules,client_id,created_at')
+        .select('id,email,display_name,role,status,allowed_modules,client_id,campaign_id,created_at')
         .neq('id', ownerId)
         .neq('role', 'SUPERADMIN');
-      profilesQuery = campaignClientId
-        ? profilesQuery.eq('client_id', campaignClientId)
-        : profilesQuery.is('client_id', null);
+      profilesQuery = campaignId
+        ? profilesQuery.eq('campaign_id', campaignId)
+        : campaignClientId
+          ? profilesQuery.eq('client_id', campaignClientId)
+          : profilesQuery.is('client_id', null).is('campaign_id', null);
       const { data: profiles, error: profilesError } = await profilesQuery.order('created_at', { ascending: true });
       if (profilesError) throw profilesError;
 
@@ -645,7 +648,7 @@ export const ModuloAdministrativo: React.FC<ModuloAdministrativoProps> = ({
         email: profile.email,
         role: roleFromProfile(profile),
         status: ['ACTIVE', 'ACTIVO'].includes(String(profile.status).toUpperCase()) ? 'Activo' : 'Suspendido',
-        clientId: profile.client_id
+        clientId: profile.client_id || profile.campaign_id
       }));
 
       const mappedPermissions: Record<string, { id: string; name: string; category: string; enabled: boolean }[]> = {};
@@ -741,13 +744,13 @@ export const ModuloAdministrativo: React.FC<ModuloAdministrativoProps> = ({
       if (ownerId) {
         const ownerProfileResult = await supabase
           .from('profiles')
-          .select('client_id')
+          .select('client_id,campaign_id')
           .eq('id', ownerId)
           .maybeSingle();
         if (ownerProfileResult.error) throw ownerProfileResult.error;
         ownerProfile = ownerProfileResult.data;
       }
-      const campaignClientId = ownerProfile?.client_id || authUser?.clientId;
+      const hasCampaignScope = Boolean(ownerProfile?.campaign_id || ownerProfile?.client_id || authUser?.clientId);
 
       const normalizedEmail = newUserEmail.trim().toLowerCase();
       let authorizationToken = '';
@@ -794,7 +797,7 @@ export const ModuloAdministrativo: React.FC<ModuloAdministrativoProps> = ({
       if (!response.ok) throw new Error(result.error || 'No fue posible crear el usuario.');
 
       setNewUserName(''); setNewUserEmail(''); setNewPassword(''); setConfirmPassword(''); setNewUserPermissions({}); setShowAddUserSection(false);
-      setActionSuccessMessage(campaignClientId
+      setActionSuccessMessage(hasCampaignScope
         ? 'Usuario real creado en Supabase Auth con sus permisos RBAC.'
         : 'Usuario creado correctamente y pendiente de asignación a una campaña.');
       await loadRealRbac();

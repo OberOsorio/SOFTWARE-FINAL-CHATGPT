@@ -247,6 +247,18 @@ const [isLoading, setIsLoading] = useState(false);
         throw new Error('Tu rol no tiene acceso a los módulos del sistema.');
       }
 
+      const { data: permissionRows, error: permissionsError } = await supabase
+        .from('user_permissions')
+        .select('function_code,actions')
+        .eq('user_id', profile.id);
+      if (permissionsError) {
+        await supabase.auth.signOut();
+        throw new Error('No fue posible cargar los permisos asignados a tu cuenta.');
+      }
+      const permissions = (permissionRows || [])
+        .filter((permission: any) => Array.isArray(permission.actions) && permission.actions.includes('ACCESS'))
+        .map((permission: any) => String(permission.function_code));
+
       const user: AuthUser = {
         id: profile.id,
         name: profile.display_name || email.split('@')[0],
@@ -255,7 +267,8 @@ const [isLoading, setIsLoading] = useState(false);
         roleName: mapped.label,
         moduleName: targetModule || 'Sistema Electoral',
         clientId: profile.client_id || undefined,
-        clientName: profile.client_id ? 'Campaña autorizada' : 'Administración global'
+        clientName: profile.client_id || profile.campaign_id ? 'Campaña autorizada' : 'Administración global',
+        permissions
       };
 
       onLoginSuccess(user, targetView);

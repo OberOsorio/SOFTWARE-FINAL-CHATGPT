@@ -128,50 +128,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const userDisplayName = authUser?.name || candidateName || 'Usuario Activo';
   const userRoleDisplay = authUser?.roleName || authUser?.moduleName || 'Candidato Oficial';
 
-  const [perms, setPerms] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
-
-  useEffect(() => {
-    const loadPerms = () => {
-      if (!authUser) return;
-      const usersListStr = localStorage.getItem('campaign_users_list');
-      const permissionsStr = localStorage.getItem('campaign_user_permissions');
-      if (usersListStr && permissionsStr) {
-        try {
-          const usersList = JSON.parse(usersListStr);
-          const permissions = JSON.parse(permissionsStr);
-          const foundUser = usersList.find((u: any) => u.email.toLowerCase() === authUser.email.toLowerCase());
-          if (foundUser && permissions[foundUser.id]) {
-            setPerms(permissions[foundUser.id]);
-            return;
-          }
-        } catch (e) {
-          console.error("Error parsing user permissions in sidebar:", e);
-        }
-      }
-      setPerms([]);
-    };
-
-    loadPerms();
-
-    const handleUpdate = () => {
-      loadPerms();
-    };
-
-    window.addEventListener('permissions-updated', handleUpdate);
-    window.addEventListener('storage', loadPerms);
-    return () => {
-      window.removeEventListener('permissions-updated', handleUpdate);
-      window.removeEventListener('storage', loadPerms);
-    };
-  }, [authUser]);
-
   const hasPermission = (permId: string) => {
-    if (userRole === 'superadmin' || userRole === 'administrador' || userRole === 'candidato' || userRole === 'auditor') {
+    const permissions = authUser?.permissions;
+    const isAlwaysFullAccess = userRole === 'GLOBAL_ADMIN' || userRole === 'superadmin' || userRole === 'auditor';
+    const isUnrestrictedCampaignOwner = (userRole === 'administrador' || userRole === 'candidato')
+      && Array.isArray(permissions)
+      && permissions.length === 0;
+    if (isAlwaysFullAccess || isUnrestrictedCampaignOwner) {
       return true;
     }
-    if (perms.length === 0) return true;
-    const match = perms.find(p => p.id === permId);
-    return match ? match.enabled : false;
+    return (permissions || []).includes(permId);
   };
 
   // Módulo Estratégico Sub-Items (10 strategic functions)

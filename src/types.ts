@@ -47,6 +47,7 @@ export interface AuthUser {
   clientName?: string;
   avatar?: string;
   accessLevel?: string;
+  permissions?: string[];
 }
 
 export type ViewMode = 

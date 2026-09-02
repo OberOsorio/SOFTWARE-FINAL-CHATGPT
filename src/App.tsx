@@ -11,7 +11,6 @@ import {
   GeofenceAlert, 
   ChatMessage 
 } from './types';
-import { isViewAllowed, isViewAllowedForModule } from './utils/rolePermissions';
 import { getHashForRoute, parseRouteFromHash } from './utils/urlRouter';
 import { useAutoLogout } from './hooks/useAutoLogout';
 import { usePlatformRealtime } from './hooks/usePlatformRealtime';
@@ -68,6 +67,73 @@ const ModuleFallback = () => (
     <div className="h-8 w-8 rounded-full border-2 border-cyan-500/30 border-t-cyan-400 animate-spin" aria-label="Cargando módulo" />
   </div>
 );
+
+const ALWAYS_FULL_CAMPAIGN_ROLES = new Set(['GLOBAL_ADMIN', 'superadmin', 'auditor']);
+const CAMPAIGN_OWNER_ROLES = new Set(['administrador', 'candidato']);
+
+const hasFullCampaignAccess = (user: AuthUser) =>
+  ALWAYS_FULL_CAMPAIGN_ROLES.has(user.role)
+  || (CAMPAIGN_OWNER_ROLES.has(user.role)
+    && Array.isArray(user.permissions)
+    && user.permissions.length === 0);
+
+const FUNCTION_DESTINATIONS: Record<string, {
+  view: ViewMode;
+  adminTab?: string;
+  strategicTab?: string;
+  territorialSubTab?: 'registro' | 'mapa';
+}> = {
+  admin_inicio: { view: 'modulo_admin', adminTab: 'inicio' },
+  admin_roles: { view: 'modulo_admin', adminTab: 'roles' },
+  admin_lideres: { view: 'modulo_admin', adminTab: 'lideres_votantes' },
+  admin_presupuesto: { view: 'modulo_admin', adminTab: 'presupuesto_cne' },
+  admin_campana: { view: 'modulo_admin', adminTab: 'gestion_campana' },
+  admin_testigos: { view: 'modulo_admin', adminTab: 'gestion_testigos' },
+  admin_jurados: { view: 'modulo_admin', adminTab: 'jurados_electorales' },
+  admin_encuestas: { view: 'modulo_admin', adminTab: 'encuestas_sondeos' },
+  est_diag_360: { view: 'gestion_estrategica', strategicTab: 'diagnostico' },
+  est_diag_territorial: { view: 'gestion_estrategica', strategicTab: 'diagnostico_territorial' },
+  est_programa: { view: 'gestion_estrategica', strategicTab: 'programa_gobierno' },
+  est_perfil: { view: 'gestion_estrategica', strategicTab: 'perfil' },
+  est_carga_cv: { view: 'gestion_estrategica', strategicTab: 'hoja_vida' },
+  est_dofa: { view: 'gestion_estrategica', strategicTab: 'dofa' },
+  est_narrativa: { view: 'gestion_estrategica', strategicTab: 'discurso' },
+  est_comunicacion: { view: 'gestion_estrategica', strategicTab: 'comunicacion_redes' },
+  est_analisis_datos: { view: 'gestion_estrategica', strategicTab: 'analisis_datos' },
+  est_agenda: { view: 'gestion_estrategica', strategicTab: 'agenda_electoral' },
+  terr_voters_reg: { view: 'gestion_territorial', territorialSubTab: 'registro' },
+  terr_territorial_mgmt: { view: 'gestion_territorial', territorialSubTab: 'mapa' },
+  terr_field_witness: { view: 'testigo_campo' },
+  terr_surveys: { view: 'encuestas' },
+  terr_table_witness: { view: 'jurado_campo' }
+};
+
+const destinationForUser = (user: AuthUser) =>
+  (user.permissions || []).map(code => FUNCTION_DESTINATIONS[code]).find(Boolean);
+
+const canAccessViewWithAssignedFunctions = (user: AuthUser, view: ViewMode) => {
+  if (hasFullCampaignAccess(user)) return view !== 'global_admin' && view !== 'saas_admin';
+  if (view === 'primera_interfaz') return true;
+  return (user.permissions || []).some(code => FUNCTION_DESTINATIONS[code]?.view === view);
+};
+
+const isAssignedLocation = (
+  user: AuthUser,
+  view: ViewMode,
+  adminTab: string,
+  strategicTab: string,
+  territorialSubTab: 'registro' | 'mapa'
+) => {
+  if (hasFullCampaignAccess(user) || view === 'primera_interfaz') return true;
+  return (user.permissions || []).some(code => {
+    const destination = FUNCTION_DESTINATIONS[code];
+    if (!destination || destination.view !== view) return false;
+    if (view === 'modulo_admin') return destination.adminTab === adminTab;
+    if (view === 'gestion_estrategica') return destination.strategicTab === strategicTab;
+    if (view === 'gestion_territorial') return destination.territorialSubTab === territorialSubTab;
+    return true;
+  });
+};
 
 export default function App() {
   const isPasswordRecovery = typeof window !== 'undefined' && (() => {
@@ -249,6 +315,34 @@ export default function App() {
   }, [authUser]);
 
   useEffect(() => {
+    if (!authUser?.id || ALWAYS_FULL_CAMPAIGN_ROLES.has(authUser.role) || Array.isArray(authUser.permissions)) return;
+    let cancelled = false;
+    void supabase
+      .from('user_permissions')
+      .select('function_code,actions')
+      .eq('user_id', authUser.id)
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        const permissions = (data || [])
+          .filter((permission: any) => Array.isArray(permission.actions) && permission.actions.includes('ACCESS'))
+          .map((permission: any) => String(permission.function_code));
+        setAuthUser(current => current?.id === authUser.id ? { ...current, permissions } : current);
+      });
+    return () => { cancelled = true; };
+  }, [authUser?.id, authUser?.role, authUser?.permissions]);
+
+  useEffect(() => {
+    if (!authUser || hasFullCampaignAccess(authUser) || !Array.isArray(authUser.permissions)) return;
+    if (isAssignedLocation(authUser, currentView, adminTab, strategicTab, territorialSubTab)) return;
+    const destination = destinationForUser(authUser);
+    if (!destination) return;
+    if (destination.adminTab) setAdminTab(destination.adminTab);
+    if (destination.strategicTab) setStrategicTab(destination.strategicTab);
+    if (destination.territorialSubTab) setTerritorialSubTab(destination.territorialSubTab);
+    setCurrentView(destination.view);
+  }, [authUser, currentView, adminTab, strategicTab, territorialSubTab]);
+
+  useEffect(() => {
     localStorage.setItem('bee_current_view', currentView);
   }, [currentView]);
 
@@ -256,14 +350,19 @@ export default function App() {
   const handleLoginSuccess = (user: AuthUser, redirectRoute?: ViewMode) => {
     setAuthUser(user);
     setIsLoginModalOpen(false);
-    
-    // Always reset all sub-tabs to their default 'inicio' / 'diagnostico' / 'registro' states on fresh login
-    setAdminTab('inicio');
-    setStrategicTab('diagnostico');
-    setTerritorialSubTab('registro');
-    
-    // Choose appropriate view based on role or explicit redirect
-    if (redirectRoute && redirectRoute !== 'landing') {
+
+    const assignedDestination = destinationForUser(user);
+    const canUseRequestedRoute = redirectRoute && redirectRoute !== 'landing'
+      && canAccessViewWithAssignedFunctions(user, redirectRoute);
+    if (!hasFullCampaignAccess(user) && assignedDestination) {
+      setAdminTab(assignedDestination.adminTab || 'inicio');
+      setStrategicTab(assignedDestination.strategicTab || 'diagnostico');
+      setTerritorialSubTab(assignedDestination.territorialSubTab || 'registro');
+      setCurrentView(canUseRequestedRoute ? redirectRoute : assignedDestination.view);
+    } else if (canUseRequestedRoute) {
+      setAdminTab('inicio');
+      setStrategicTab('diagnostico');
+      setTerritorialSubTab('registro');
       setCurrentView(redirectRoute);
     } else if (user.role === 'territorial') {
       setCurrentView('gestion_territorial');
@@ -308,10 +407,7 @@ export default function App() {
 
     // Role-based permission check
     const userRole = authUser.role;
-    const hasFullCampaignAccess = userRole === 'administrador' || userRole === 'candidato';
-    const isCampaignView = view !== 'global_admin' && view !== 'saas_admin';
-    const isAllowed = (hasFullCampaignAccess && isCampaignView)
-      || (isViewAllowed(userRole, view) && isViewAllowedForModule(authUser.moduleName, view));
+    const isAllowed = canAccessViewWithAssignedFunctions(authUser, view);
 
     if (isAllowed) {
       setCurrentView(view);
@@ -416,6 +512,17 @@ export default function App() {
         </Suspense>
       </div>
     );
+  }
+
+  const restrictedPermissionsReady = !authUser
+    || ALWAYS_FULL_CAMPAIGN_ROLES.has(authUser.role)
+    || Array.isArray(authUser.permissions);
+  const restrictedLocationAllowed = !authUser
+    || hasFullCampaignAccess(authUser)
+    || (restrictedPermissionsReady
+      && isAssignedLocation(authUser, currentView, adminTab, strategicTab, territorialSubTab));
+  if (!restrictedPermissionsReady || !restrictedLocationAllowed) {
+    return <ModuleFallback />;
   }
 
   // Render Main Dashboard Layout Shell
