@@ -1,0 +1,9 @@
+"use client";
+import { useState } from "react";
+import { ArrowLeft,Check,Building2,BrainCircuit,MapPinned } from "lucide-react";
+import { modules } from "@/lib/demo";
+import { LoginModal } from "./LoginModal";
+import Link from "next/link";
+
+const icons=[Building2,BrainCircuit,MapPinned];
+export default function ModuleSelector(){const [selected,setSelected]=useState<string|null>(null);return <main className="mesh min-h-screen px-5 py-10 text-white"><div className="mx-auto max-w-6xl"><Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white"><ArrowLeft size={18}/>Volver al portal</Link><div className="mx-auto mt-10 max-w-3xl text-center"><span className="label text-cyan-300">Plataforma electoral integral</span><h1 className="mt-3 text-4xl font-black md:text-5xl">Seleccione el módulo de operación</h1><p className="mt-4 text-slate-300">Acceda a las herramientas de su campaña según su área y permisos.</p></div><div className="mt-12 grid gap-6 lg:grid-cols-3">{modules.map((m,i)=>{const Icon=icons[i];return <article key={m.id} className="glass flex min-h-[430px] flex-col rounded-3xl p-7"><div className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-500/20 text-cyan-300"><Icon size={30}/></div><h2 className="mt-6 text-2xl font-black">{m.title}</h2><p className="mt-2 min-h-12 text-sm text-slate-300">{m.subtitle}</p><p className="label mt-7 text-slate-400">Funcionalidades principales</p><ul className="mt-4 flex-1 space-y-3">{m.features.map(f=><li key={f} className="flex gap-2 text-sm text-slate-200"><Check size={17} className="mt-0.5 text-cyan-300"/>{f}</li>)}</ul><button onClick={()=>setSelected(m.id)} className="mt-7 rounded-xl bg-blue-600 py-3 font-bold hover:bg-blue-500">Iniciar sesión</button></article>})}</div></div>{selected&&<LoginModal module={selected} onClose={()=>setSelected(null)}/>}</main>}

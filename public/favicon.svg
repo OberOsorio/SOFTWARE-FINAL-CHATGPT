@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Solid background rounded rect for high visibility/contrast -->
+  <rect width="32" height="32" rx="8" fill="#021c15" />
+  <!-- Glowing border outline -->
+  <rect width="30" height="30" x="1" y="1" rx="7" fill="none" stroke="#00d2a0" stroke-width="1.8" />
+  
+  <!-- Logo Icon drawn over the background -->
+  <g stroke="#00e6b0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Ballot Paper inserted into top slot -->
+    <path d="M12 5L20 9L16 11.5L8 7.5Z" fill="#00e6b0" fill-opacity="0.3" />
+    <path d="M12 5L20 9L16 11.5L8 7.5Z" />
+    <path d="M16 11.5V8.5" />
+
+    <!-- Top Box Lid & Slot -->
+    <path d="M5 11.5L12 9H27L20 11.5Z" />
+    <line x1="11" y1="10.25" x2="21" y2="10.25" stroke-width="1.8" />
+
+    <!-- Box Body -->
+    <path d="M5 11.5V23C5 24 5.8 24.8 6.8 24.8H20.2C21.2 24.8 22 24 22 23V11.5" />
+    <path d="M20 11.5L27 9V20.5L20 23" />
+
+    <!-- Brain / Leaf Circle Seal in Front Panel -->
+    <circle cx="13.5" cy="18.5" r="3.8" stroke-width="1.5" fill="#00e6b0" fill-opacity="0.25" />
+  </g>
+</svg>

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.ts": {
+      "includeFiles": "{server.ts,server/**,src/types/**}"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/global-admin/maintenance/cleanup-demos",
+      "schedule": "0 * * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/global-admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/modulos",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/index.html"
+    }
+  ]
+}

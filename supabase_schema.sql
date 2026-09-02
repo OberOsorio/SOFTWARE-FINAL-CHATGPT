@@ -1,0 +1,811 @@
+-- Definitive Supabase Schema for CAMPAÑA GANADORA AI
+-- Multi-Tenancy, Normalized Modules, Granular Access Control and Administrative Module
+
+-- 1. Helper Security Functions (Prevents RLS Recursion)
+CREATE OR REPLACE FUNCTION public.is_superadmin()
+RETURNS BOOLEAN
+LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND UPPER(role) IN ('SUPERADMIN', 'GLOBAL_ADMIN')
+      AND UPPER(status) IN ('ACTIVE', 'ACTIVO')
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_user_client_id()
+RETURNS UUID
+LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
+DECLARE result UUID;
+BEGIN
+  SELECT client_id INTO result FROM profiles WHERE id = auth.uid() LIMIT 1;
+  RETURN result;
+END;
+$$;
+
+-- 2. Clientes (Tenants / Campañas Organizacionales)
+CREATE TABLE IF NOT EXISTS clients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    nit TEXT UNIQUE,
+    email TEXT UNIQUE NOT NULL,
+    phone TEXT,
+    address TEXT,
+    city TEXT,
+    department TEXT,
+    country TEXT DEFAULT 'Colombia',
+    logo_url TEXT,
+    plan TEXT DEFAULT 'BASIC' CHECK (plan IN ('BASIC', 'PRO', 'ENTERPRISE')),
+    status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'INACTIVE')),
+    max_users INTEGER DEFAULT 10,
+    allowed_modules TEXT[] DEFAULT '{ADMINISTRATIVE,TERRITORY,STRATEGY,CRM}',
+    start_date TIMESTAMPTZ DEFAULT NOW(),
+    expiry_date TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Planes de Suscripción
+CREATE TABLE IF NOT EXISTS plans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    code TEXT UNIQUE NOT NULL,
+    description TEXT,
+    max_users INTEGER DEFAULT 10,
+    max_campaigns INTEGER DEFAULT 1,
+    allowed_module_codes TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Módulos del Sistema
+CREATE TABLE IF NOT EXISTS modules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    icon TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Funciones de Módulos (Permisos Granulares)
+CREATE TABLE IF NOT EXISTS module_functions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_code TEXT REFERENCES modules(code) ON DELETE CASCADE,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    UNIQUE(module_code, code)
+);
+
+-- 6. Perfiles (Extensión de Auth.Users)
+CREATE TABLE IF NOT EXISTS profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+    email TEXT NOT NULL,
+    display_name TEXT,
+    phone TEXT,
+    role TEXT NOT NULL DEFAULT 'USUARIO' CHECK (UPPER(BTRIM(role)) IN ('SUPERADMIN', 'GLOBAL_ADMIN', 'ADMIN_CLIENTE', 'ADMINISTRADOR', 'DIRECTOR', 'COORDINADOR', 'USUARIO', 'USUARIO_LIMITADO')),
+    status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'SUSPENDED')),
+    allowed_modules TEXT[] DEFAULT '{ADMINISTRATIVE}',
+    custom_role_id UUID,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Upgrade installations where profiles already existed with an older shape.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS cedula TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'USUARIO';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ACTIVE';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS allowed_modules TEXT[] DEFAULT ARRAY['ADMINISTRATIVE']::TEXT[];
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS custom_role_id UUID;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- 7. Roles Personalizados por Cliente / Organización
+CREATE TABLE IF NOT EXISTS custom_roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    code TEXT NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    is_system BOOLEAN DEFAULT false,
+    allowed_modules TEXT[] DEFAULT '{ADMINISTRATIVE}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. Permisos Granulares de Roles Personalizados
+CREATE TABLE IF NOT EXISTS custom_role_permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role_id UUID REFERENCES custom_roles(id) ON DELETE CASCADE,
+    module_code TEXT NOT NULL,
+    function_code TEXT NOT NULL,
+    actions TEXT[] DEFAULT '{VIEW}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(role_id, module_code, function_code)
+);
+
+-- 9. Permisos Directos de Usuario (Matriz de Acceso)
+CREATE TABLE IF NOT EXISTS user_permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    module_code TEXT NOT NULL,
+    function_code TEXT NOT NULL,
+    actions TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, module_code, function_code)
+);
+
+-- 10. Campañas Electorales
+CREATE TABLE IF NOT EXISTS campaigns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    candidato_nombre TEXT,
+    cargo_postulacion TEXT,
+    departamento TEXT,
+    municipio TEXT,
+    circunscripcion TEXT,
+    fecha_inicio DATE DEFAULT CURRENT_DATE,
+    fecha_eleccion DATE,
+    meta_votos INTEGER DEFAULT 0,
+    presupuesto_total NUMERIC(15,2) DEFAULT 0,
+    estado TEXT DEFAULT 'ACTIVA' CHECK (estado IN ('PLANIFICACION', 'ACTIVA', 'PAUSADA', 'FINALIZADA')),
+    descripcion TEXT,
+    is_demo BOOLEAN NOT NULL DEFAULT FALSE,
+    demo_expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT campaigns_demo_expiration_valid CHECK (
+      (NOT is_demo AND demo_expires_at IS NULL)
+      OR (is_demo AND demo_expires_at IS NOT NULL AND demo_expires_at > created_at AND demo_expires_at <= created_at + INTERVAL '5 days')
+    )
+);
+
+CREATE INDEX IF NOT EXISTS campaigns_demo_expiration_idx
+ON campaigns (demo_expires_at) WHERE is_demo = TRUE;
+
+-- 11. Actividades e Hitos de Campaña
+CREATE TABLE IF NOT EXISTS campaign_activities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+    titulo TEXT NOT NULL,
+    descripcion TEXT,
+    fecha DATE DEFAULT CURRENT_DATE,
+    responsable_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    estado TEXT DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'EN_PROGRESO', 'COMPLETADA', 'CANCELADA')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 12. Líderes Comunitarios y Políticos
+CREATE TABLE IF NOT EXISTS leaders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    cedula TEXT NOT NULL,
+    telefono TEXT,
+    email TEXT,
+    comuna TEXT,
+    barrio TEXT,
+    puesto TEXT,
+    mesa TEXT,
+    meta_votos INTEGER DEFAULT 50,
+    votos_comprometidos INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 13. Votantes (Censo Propio y Fidelización)
+CREATE TABLE IF NOT EXISTS voters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    cedula TEXT UNIQUE NOT NULL,
+    telefono TEXT,
+    email TEXT,
+    departamento TEXT DEFAULT 'Colombia',
+    municipio TEXT,
+    comuna TEXT,
+    barrio TEXT,
+    puesto TEXT,
+    mesa TEXT,
+    lider_id UUID REFERENCES leaders(id) ON DELETE SET NULL,
+    intencion TEXT DEFAULT 'Voto Seguro' CHECK (intencion IN ('Voto Seguro', 'Probable', 'Indeciso', 'En Contra')),
+    status TEXT DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 14. Presupuesto e Ingresos/Gastos CNE (Cuentas Claras)
+CREATE TABLE IF NOT EXISTS budget_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('INGRESO', 'GASTO')),
+    categoria_cne TEXT NOT NULL,
+    concepto TEXT NOT NULL,
+    monto NUMERIC(15,2) NOT NULL,
+    fecha DATE DEFAULT CURRENT_DATE,
+    comprobante_numero TEXT,
+    soporte_url TEXT,
+    beneficiario_nombre TEXT,
+    beneficiario_nit TEXT,
+    estado TEXT DEFAULT 'REGISTRADO' CHECK (estado IN ('REGISTRADO', 'VERIFICADO', 'OBSERVADO', 'ANULADO')),
+    observaciones TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 15. Testigos Electorales (Acreditación y Mesa)
+CREATE TABLE IF NOT EXISTS witnesses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    cedula TEXT NOT NULL,
+    telefono TEXT,
+    email TEXT,
+    municipio TEXT,
+    zona TEXT,
+    puesto TEXT NOT NULL,
+    mesa TEXT NOT NULL,
+    estado TEXT DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'CAPACITADO', 'ACREDITADO', 'EN_MESA', 'INACTIVO')),
+    documento_soporte_url TEXT,
+    observaciones TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 16. Jurados Electorales (Identificación y Seguimiento)
+CREATE TABLE IF NOT EXISTS jurors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    cedula TEXT NOT NULL,
+    telefono TEXT,
+    municipio TEXT,
+    puesto TEXT NOT NULL,
+    mesa TEXT NOT NULL,
+    cargo TEXT DEFAULT 'VOCAL' CHECK (cargo IN ('PRESIDENTE', 'VICEPRESIDENTE', 'VOCAL', 'REMANENTE')),
+    afinidad TEXT DEFAULT 'NEUTRO' CHECK (afinidad IN ('A_FAVOR', 'NEUTRO', 'EN_CONTRA', 'DESCONOCIDO')),
+    observaciones TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 17. Encuestas y Sondeos de Opinión
+CREATE TABLE IF NOT EXISTS surveys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    titulo TEXT NOT NULL,
+    descripcion TEXT,
+    fecha_inicio DATE DEFAULT CURRENT_DATE,
+    fecha_fin DATE,
+    muestra_objetivo INTEGER DEFAULT 200,
+    estado TEXT DEFAULT 'ACTIVA' CHECK (estado IN ('BORRADOR', 'ACTIVA', 'CERRADA')),
+    preguntas JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 18. Respuestas de Encuestas
+CREATE TABLE IF NOT EXISTS survey_responses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    survey_id UUID REFERENCES surveys(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    encuestador_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    comuna TEXT,
+    barrio TEXT,
+    respuestas JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 19. Registros E14 (Control Electoral y Escrutinio)
+CREATE TABLE IF NOT EXISTS e14_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    puesto TEXT NOT NULL,
+    mesa TEXT NOT NULL,
+    votos_candidato INTEGER DEFAULT 0,
+    votos_total_mesa INTEGER DEFAULT 0,
+    foto_url TEXT,
+    testigo_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    status TEXT DEFAULT 'PENDING',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 20. Logs de Auditoría Global
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    resource TEXT NOT NULL,
+    details JSONB,
+    timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 21. Licencias Activas
+CREATE TABLE IF NOT EXISTS licenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    plan_id UUID REFERENCES plans(id) ON DELETE SET NULL,
+    start_date TIMESTAMPTZ DEFAULT NOW(),
+    expiry_date TIMESTAMPTZ,
+    status TEXT DEFAULT 'ACTIVA',
+    allowed_modules TEXT[] DEFAULT '{ADMINISTRATIVE,TERRITORY,STRATEGY,CRM}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 22. Control de Uso de API (Consultas de Lugar de Votación)
+CREATE TABLE IF NOT EXISTS client_api_usage (
+    client_id UUID PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+    total_assigned INTEGER DEFAULT 0,
+    total_consumed INTEGER DEFAULT 0,
+    last_query_at TIMESTAMPTZ,
+    status TEXT DEFAULT 'ACTIVE',
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 23. Historial de Consultas de Lugar de Votación
+CREATE TABLE IF NOT EXISTS polling_station_queries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    user_name TEXT,
+    user_email TEXT,
+    user_role TEXT,
+    module_source TEXT,
+    query_type TEXT,
+    documento_consultado TEXT,
+    puesto_encontrado TEXT,
+    mesa_encontrada TEXT,
+    municipio_encontrado TEXT,
+    departamento_encontrado TEXT,
+    found_count INTEGER DEFAULT 0,
+    not_found_count INTEGER DEFAULT 0,
+    request_id TEXT,
+    results_summary JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 24. Transacciones de Saldo de API
+CREATE TABLE IF NOT EXISTS api_usage_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    amount INTEGER NOT NULL,
+    transaction_type TEXT NOT NULL,
+    previous_balance INTEGER,
+    new_balance INTEGER,
+    query_id UUID REFERENCES polling_station_queries(id) ON DELETE SET NULL,
+    details TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 25. Solicitudes de Acceso de Administrador (SuperAdmin Review Queue)
+CREATE TABLE IF NOT EXISTS admin_access_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT,
+    requested_username TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    status TEXT DEFAULT 'PENDIENTE' CHECK (status IN ('PENDIENTE', 'APROBADA', 'RECHAZADA', 'CANCELADA')),
+    rejection_reason TEXT,
+    reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- --- NUEVAS TABLAS PARA GESTIÓN ESTRATÉGICA Y REALISMO ---
+
+-- 26. Candidatos Detallados
+CREATE TABLE IF NOT EXISTS candidates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    identificacion TEXT,
+    cargo TEXT,
+    partido TEXT,
+    territorio TEXT,
+    perfil_profesional TEXT,
+    propuesta_valor TEXT,
+    foto_url TEXT,
+    redes_sociales JSONB DEFAULT '{}',
+    status TEXT DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 27. Diagnósticos AI y Territoriales
+CREATE TABLE IF NOT EXISTS diagnostics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+    tipo TEXT NOT NULL CHECK (tipo IN ('360_AI', 'TERRITORIAL', 'SOCIAL_MEDIA')),
+    territorio_nombre TEXT,
+    metodologia TEXT,
+    resultados_json JSONB DEFAULT '{}',
+    conclusiones_ai TEXT,
+    estado TEXT DEFAULT 'COMPLETADO',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 28. Sectores de Diagnóstico
+CREATE TABLE IF NOT EXISTS sectors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    diagnostic_id UUID REFERENCES diagnostics(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    prioridad TEXT CHECK (prioridad IN ('ALTA', 'MEDIA', 'BAJA')),
+    meta_general TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 29. Variables por Sector
+CREATE TABLE IF NOT EXISTS sector_variables (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sector_id UUID REFERENCES sectors(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    linea_base TEXT,
+    meta TEXT,
+    indicador TEXT,
+    fuente_dato TEXT,
+    prioridad TEXT DEFAULT 'MEDIA',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 30. Programas de Gobierno
+CREATE TABLE IF NOT EXISTS government_programs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    periodo TEXT,
+    vision_general TEXT,
+    estado TEXT DEFAULT 'BORRADOR' CHECK (estado IN ('BORRADOR', 'REVISION', 'PUBLICADO')),
+    avance_porcentaje INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 31. Ejes Estratégicos
+CREATE TABLE IF NOT EXISTS strategic_axes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id UUID REFERENCES government_programs(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    objetivo_principal TEXT,
+    prioridad INTEGER DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 32. Propuestas Detalladas
+CREATE TABLE IF NOT EXISTS proposals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    axis_id UUID REFERENCES strategic_axes(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    problema_identificado TEXT,
+    objetivo_especifico TEXT,
+    indicador_cumplimiento TEXT,
+    meta_cuantitativa TEXT,
+    presupuesto_estimado NUMERIC(15,2) DEFAULT 0,
+    prioridad TEXT DEFAULT 'ALTA',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 33. Matriz DOFA / SWOT
+CREATE TABLE IF NOT EXISTS swot_matrices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+    fortalezas TEXT[] DEFAULT '{}',
+    oportunidades TEXT[] DEFAULT '{}',
+    debilidades TEXT[] DEFAULT '{}',
+    amenazas TEXT[] DEFAULT '{}',
+    conclusiones_ai TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 34. Fichas Territoriales (Micro-localización)
+CREATE TABLE IF NOT EXISTS territorial_fiches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    comuna_corregimiento TEXT NOT NULL,
+    barrio_vereda TEXT,
+    problema_principal TEXT,
+    propuesta_solucion TEXT,
+    impacto_esperado TEXT,
+    sector_relacionado TEXT,
+    lider_responsable_id UUID REFERENCES leaders(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 35. Seguimiento de Comunicación y Redes
+CREATE TABLE IF NOT EXISTS communication_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    plataforma TEXT NOT NULL,
+    tipo_contenido TEXT,
+    contenido_texto TEXT,
+    url_publicacion TEXT,
+    metricas_json JSONB DEFAULT '{}',
+    sentimiento_ai TEXT,
+    fecha_publicacion TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 36. Agenda y Calendario de Campaña
+CREATE TABLE IF NOT EXISTS campaign_calendar (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    titulo TEXT NOT NULL,
+    descripcion TEXT,
+    tipo_evento TEXT CHECK (tipo_evento IN ('REUNION', 'MITIN', 'ENTREVISTA', 'VISITA_TERRITORIAL', 'OTRO')),
+    fecha_inicio TIMESTAMPTZ NOT NULL,
+    fecha_fin TIMESTAMPTZ,
+    ubicacion TEXT,
+    latitud NUMERIC(10,8),
+    longitud NUMERIC(11,8),
+    responsable_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    estado TEXT DEFAULT 'PROGRAMADO' CHECK (estado IN ('PROGRAMADO', 'REALIZADO', 'CANCELADO')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- --- ÍNDICES ADICIONALES ---
+CREATE INDEX IF NOT EXISTS idx_candidates_client ON candidates(client_id);
+CREATE INDEX IF NOT EXISTS idx_diagnostics_client ON diagnostics(client_id);
+CREATE INDEX IF NOT EXISTS idx_gov_programs_client ON government_programs(client_id);
+CREATE INDEX IF NOT EXISTS idx_swot_client ON swot_matrices(client_id);
+CREATE INDEX IF NOT EXISTS idx_territorial_fiches_client ON territorial_fiches(client_id);
+CREATE INDEX IF NOT EXISTS idx_comm_logs_client ON communication_logs(client_id);
+CREATE INDEX IF NOT EXISTS idx_calendar_client ON campaign_calendar(client_id);
+
+-- --- RLS PARA NUEVAS TABLAS ---
+ALTER TABLE candidates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE diagnostics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sectors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sector_variables ENABLE ROW LEVEL SECURITY;
+ALTER TABLE government_programs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE strategic_axes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE swot_matrices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE territorial_fiches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE communication_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_calendar ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS candidates_isolation ON candidates;
+CREATE POLICY candidates_isolation ON candidates FOR ALL USING (client_id = get_user_client_id() OR is_superadmin());
+DROP POLICY IF EXISTS diagnostics_isolation ON diagnostics;
+CREATE POLICY diagnostics_isolation ON diagnostics FOR ALL USING (client_id = get_user_client_id() OR is_superadmin());
+DROP POLICY IF EXISTS sectors_isolation ON sectors;
+CREATE POLICY sectors_isolation ON sectors FOR ALL USING (EXISTS (SELECT 1 FROM diagnostics WHERE diagnostics.id = sectors.diagnostic_id AND (diagnostics.client_id = get_user_client_id() OR is_superadmin())));
+DROP POLICY IF EXISTS variables_isolation ON sector_variables;
+CREATE POLICY variables_isolation ON sector_variables FOR ALL USING (EXISTS (SELECT 1 FROM sectors JOIN diagnostics ON sectors.diagnostic_id = diagnostics.id WHERE sector_variables.sector_id = sectors.id AND (diagnostics.client_id = get_user_client_id() OR is_superadmin())));
+DROP POLICY IF EXISTS gov_programs_isolation ON government_programs;
+CREATE POLICY gov_programs_isolation ON government_programs FOR ALL USING (client_id = get_user_client_id() OR is_superadmin());
+DROP POLICY IF EXISTS strategic_axes_isolation ON strategic_axes;
+CREATE POLICY strategic_axes_isolation ON strategic_axes FOR ALL USING (EXISTS (SELECT 1 FROM government_programs WHERE government_programs.id = strategic_axes.program_id AND (government_programs.client_id = get_user_client_id() OR is_superadmin())));
+DROP POLICY IF EXISTS proposals_isolation ON proposals;
+CREATE POLICY proposals_isolation ON proposals FOR ALL USING (EXISTS (SELECT 1 FROM strategic_axes JOIN government_programs ON strategic_axes.program_id = government_programs.id WHERE proposals.axis_id = strategic_axes.id AND (government_programs.client_id = get_user_client_id() OR is_superadmin())));
+DROP POLICY IF EXISTS swot_isolation ON swot_matrices;
+CREATE POLICY swot_isolation ON swot_matrices FOR ALL USING (client_id = get_user_client_id() OR is_superadmin());
+DROP POLICY IF EXISTS territorial_fiches_isolation ON territorial_fiches;
+CREATE POLICY territorial_fiches_isolation ON territorial_fiches FOR ALL USING (client_id = get_user_client_id() OR is_superadmin());
+DROP POLICY IF EXISTS comm_logs_isolation ON communication_logs;
+CREATE POLICY comm_logs_isolation ON communication_logs FOR ALL USING (client_id = get_user_client_id() OR is_superadmin());
+DROP POLICY IF EXISTS calendar_isolation ON campaign_calendar;
+CREATE POLICY calendar_isolation ON campaign_calendar FOR ALL USING (client_id = get_user_client_id() OR is_superadmin());
+
+-- --- SEED DATA INICIAL ---
+
+-- --- ÍNDICES DE RENDIMIENTO ---
+CREATE INDEX IF NOT EXISTS idx_admin_requests_email ON admin_access_requests(email);
+CREATE INDEX IF NOT EXISTS idx_admin_requests_status ON admin_access_requests(status);
+CREATE INDEX IF NOT EXISTS idx_profiles_client ON profiles(client_id);
+CREATE INDEX IF NOT EXISTS idx_voters_client ON voters(client_id);
+CREATE INDEX IF NOT EXISTS idx_voters_lider ON voters(lider_id);
+CREATE INDEX IF NOT EXISTS idx_leaders_client ON leaders(client_id);
+CREATE INDEX IF NOT EXISTS idx_budget_client ON budget_items(client_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_client ON campaigns(client_id);
+CREATE INDEX IF NOT EXISTS idx_witnesses_client ON witnesses(client_id);
+CREATE INDEX IF NOT EXISTS idx_jurors_client ON jurors(client_id);
+CREATE INDEX IF NOT EXISTS idx_surveys_client ON surveys(client_id);
+CREATE INDEX IF NOT EXISTS idx_api_usage_client ON client_api_usage(client_id);
+CREATE INDEX IF NOT EXISTS idx_api_queries_client ON polling_station_queries(client_id);
+CREATE INDEX IF NOT EXISTS idx_api_trans_client ON api_usage_transactions(client_id);
+
+-- --- ROW LEVEL SECURITY (RLS) ---
+
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_role_permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leaders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budget_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE witnesses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jurors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE surveys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE survey_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE e14_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE licenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE client_api_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE polling_station_queries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_usage_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE modules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE module_functions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plans ENABLE ROW LEVEL SECURITY;
+
+-- 1. Modules, Functions & Plans: Public read for authenticated users
+DROP POLICY IF EXISTS modules_read ON modules;
+CREATE POLICY modules_read ON modules FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS functions_read ON module_functions;
+CREATE POLICY functions_read ON module_functions FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS plans_read ON plans;
+CREATE POLICY plans_read ON plans FOR SELECT USING (true);
+
+-- 2. Profiles Isolation
+DROP POLICY IF EXISTS profile_select ON profiles;
+CREATE POLICY profile_select ON profiles FOR SELECT USING (
+    id = auth.uid() OR 
+    is_superadmin() OR 
+    (client_id = get_user_client_id() AND get_user_client_id() IS NOT NULL)
+);
+
+DROP POLICY IF EXISTS profile_insert ON profiles;
+CREATE POLICY profile_insert ON profiles FOR INSERT WITH CHECK (is_superadmin());
+
+DROP POLICY IF EXISTS profile_update ON profiles;
+CREATE POLICY profile_update ON profiles FOR UPDATE
+USING (is_superadmin())
+WITH CHECK (is_superadmin());
+
+-- 3. Clients Isolation
+DROP POLICY IF EXISTS client_isolation ON clients;
+CREATE POLICY client_isolation ON clients FOR ALL USING (
+    id = get_user_client_id() OR is_superadmin()
+) WITH CHECK (is_superadmin());
+
+-- 4. Custom Roles & Permissions Isolation
+DROP POLICY IF EXISTS custom_roles_isolation ON custom_roles;
+CREATE POLICY custom_roles_isolation ON custom_roles FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+DROP POLICY IF EXISTS custom_role_permissions_isolation ON custom_role_permissions;
+CREATE POLICY custom_role_permissions_isolation ON custom_role_permissions FOR ALL USING (
+    EXISTS (SELECT 1 FROM custom_roles WHERE custom_roles.id = custom_role_permissions.role_id AND (custom_roles.client_id = get_user_client_id() OR is_superadmin()))
+);
+
+-- 5. User Permissions Isolation
+DROP POLICY IF EXISTS permission_isolation ON user_permissions;
+CREATE POLICY permission_isolation ON user_permissions FOR ALL USING (
+    user_id = auth.uid() OR is_superadmin() OR (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'ADMIN_CLIENTE') 
+      AND user_id IN (SELECT id FROM profiles WHERE client_id = get_user_client_id())
+    )
+);
+
+-- 6. Campaigns & Activities Isolation
+DROP POLICY IF EXISTS campaigns_isolation ON campaigns;
+CREATE POLICY campaigns_isolation ON campaigns FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+DROP POLICY IF EXISTS campaign_activities_isolation ON campaign_activities;
+CREATE POLICY campaign_activities_isolation ON campaign_activities FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- 7. Leaders Isolation
+DROP POLICY IF EXISTS leaders_isolation ON leaders;
+CREATE POLICY leaders_isolation ON leaders FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- 8. Voters Isolation
+DROP POLICY IF EXISTS voters_isolation ON voters;
+CREATE POLICY voters_isolation ON voters FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- 9. Budget Items Isolation
+DROP POLICY IF EXISTS budget_isolation ON budget_items;
+CREATE POLICY budget_isolation ON budget_items FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- 10. Witnesses Isolation
+DROP POLICY IF EXISTS witnesses_isolation ON witnesses;
+CREATE POLICY witnesses_isolation ON witnesses FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- 11. Jurors Isolation
+DROP POLICY IF EXISTS jurors_isolation ON jurors;
+CREATE POLICY jurors_isolation ON jurors FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- 12. Surveys Isolation
+DROP POLICY IF EXISTS surveys_isolation ON surveys;
+CREATE POLICY surveys_isolation ON surveys FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+DROP POLICY IF EXISTS survey_responses_isolation ON survey_responses;
+CREATE POLICY survey_responses_isolation ON survey_responses FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- 13. Audit & Licenses
+DROP POLICY IF EXISTS audit_isolation ON audit_logs;
+CREATE POLICY audit_isolation ON audit_logs FOR SELECT USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+DROP POLICY IF EXISTS license_isolation ON licenses;
+CREATE POLICY license_isolation ON licenses FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- 14. API Usage Isolation
+DROP POLICY IF EXISTS api_usage_isolation ON client_api_usage;
+CREATE POLICY api_usage_isolation ON client_api_usage FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+DROP POLICY IF EXISTS api_queries_isolation ON polling_station_queries;
+CREATE POLICY api_queries_isolation ON polling_station_queries FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+DROP POLICY IF EXISTS api_transactions_isolation ON api_usage_transactions;
+CREATE POLICY api_transactions_isolation ON api_usage_transactions FOR ALL USING (
+    client_id = get_user_client_id() OR is_superadmin()
+);
+
+-- --- SEED DATA INICIAL ---
+
+INSERT INTO modules (code, name, description, icon) VALUES
+('ADMINISTRATIVE', 'Gestión Administrativa', 'Control de recursos, presupuesto CNE, roles, votantes y gestión de campaña', 'Shield'),
+('TERRITORY', 'Gestión Territorial', 'Control geográfico, georreferenciación y censo en tiempo real', 'MapPin'),
+('STRATEGY', 'Gestión Estratégica', 'Planeación de campaña, análisis FODA y metas electorales', 'Target'),
+('CRM', 'CRM Electoral', 'Gestión de simpatizantes, votantes y árbol de referidos', 'Users'),
+('ELECTORAL', 'Electoral (E14)', 'Digitalización, validación de actas E-14 y control de escrutinio', 'Vote'),
+('ANALYSIS', 'Análisis de Datos', 'Sondeos, tendencias y proyecciones estadísticas', 'BarChart3'),
+('COMMUNICATIONS', 'Comunicaciones', 'Prensa, redes sociales y difusión multicanal', 'MessageSquare')
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
+
+-- Funciones del Módulo Administrativo
+INSERT INTO module_functions (module_code, code, name, description) VALUES
+('ADMINISTRATIVE', 'ADMIN_DASHBOARD', 'Inicio / Dashboard', 'Visualización de métricas generales y estadísticas'),
+('ADMINISTRATIVE', 'ROLES_MANAGEMENT', 'Gestión de Roles', 'Creación y administración de roles y permisos'),
+('ADMINISTRATIVE', 'LEADERS_VOTERS', 'Líderes y Votantes', 'Administración de líderes territoriales y censo de votantes'),
+('ADMINISTRATIVE', 'BUDGET_CNE', 'Presupuesto / CNE', 'Ingresos, gastos y reportes para CNE / Cuentas Claras'),
+('ADMINISTRATIVE', 'CAMPAIGN_MANAGEMENT', 'Gestión de Campaña', 'Objetivos, hitos y actividades de campaña'),
+('ADMINISTRATIVE', 'WITNESSES_MANAGEMENT', 'Gestión de Testigos', 'Acreditación y monitoreo de testigos electorales'),
+('ADMINISTRATIVE', 'JURORS_MANAGEMENT', 'Jurados Electorales', 'Monitoreo de jurados de votación en mesas'),
+('ADMINISTRATIVE', 'POLLS_SURVEYS', 'Encuestas y Sondeos', 'Creación y análisis de encuestas de opinión'),
+('ADMINISTRATIVE', 'SYSTEM_SETTINGS', 'Configuración', 'Ajustes del sistema, usuarios y seguridad')
+ON CONFLICT (module_code, code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;

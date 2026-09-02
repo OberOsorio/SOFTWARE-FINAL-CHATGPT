@@ -1,0 +1,750 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* ==========================================================================
+   GLOBAL TYPOGRAPHY & DESIGN SYSTEM ROOTS
+   ========================================================================== */
+:root {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Viewport Root & Mobile First Reset */
+html, body {
+  background-color: #030712;
+  color: #f8fafc;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  width: 100%;
+  min-width: 320px;
+  max-width: 100vw;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Base font helpers */
+.font-sans {
+  font-family: var(--font-sans) !important;
+}
+
+.font-display {
+  font-family: var(--font-display) !important;
+}
+
+.font-mono {
+  font-family: var(--font-mono) !important;
+  font-feature-settings: "liga" 1, "calt" 1, "zero" 1;
+}
+
+/* Touch & Interaction Standards */
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari, Edge, Firefox and Opera */
+  .no-scrollbar::-webkit-scrollbar,
+  .scrollbar-none::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+  }
+  .no-scrollbar,
+  .scrollbar-none {
+    -ms-overflow-style: none !important;  /* IE and Edge */
+    scrollbar-width: none !important;  /* Firefox */
+  }
+
+  /* Responsive Table Container with Horizontal Scroll Isolation */
+  .responsive-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fluid Responsive Typography */
+  .text-fluid-hero {
+    font-size: clamp(1.75rem, 4.5vw + 0.5rem, 3.5rem);
+    line-height: 1.12;
+  }
+
+  .text-fluid-title {
+    font-size: clamp(1.25rem, 2.8vw + 0.25rem, 2.25rem);
+    line-height: 1.2;
+  }
+
+  .text-fluid-subtitle {
+    font-size: clamp(0.95rem, 1.4vw + 0.2rem, 1.25rem);
+    line-height: 1.4;
+  }
+
+  /* Circuit board grid pattern for sci-fi dark theme */
+  .bg-circuit-pattern {
+    background-color: #030712;
+    background-image: 
+      radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.14) 0%, transparent 60%),
+      linear-gradient(rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+    background-size: 100% 100%, 32px 32px, 32px 32px;
+  }
+
+  /* Glassmorphism panel styling */
+  .glass-panel-cyber {
+    background: rgba(4, 19, 41, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 0 14px 0 rgba(6, 182, 212, 0.1);
+  }
+
+  .glass-panel-teal {
+    background: rgba(5, 27, 44, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.15);
+  }
+
+  .glass-panel-cyan {
+    background: rgba(4, 23, 45, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+  }
+}
+
+/* ==========================================================================
+   REDSUN & BEE CAMPAIGN AI DESIGN SYSTEM VARIABLES & UTILITIES
+   ========================================================================== */
+:root {
+  --redsun-bg: #080808;
+  --redsun-surface: #111111;
+  --redsun-surface-light: #181818;
+  --redsun-border: rgba(255, 255, 255, 0.1);
+  --redsun-border-hover: rgba(255, 77, 77, 0.4);
+  --redsun-text-primary: #FFFFFF;
+  --redsun-text-secondary: #A0A0A0;
+  --redsun-text-muted: #666666;
+  
+  --redsun-coral: #FF4D4D;
+  --redsun-red: #FF2E2E;
+  --redsun-orange: #FF7A3D;
+  --redsun-pink: #FF6B81;
+  --redsun-gradient: linear-gradient(135deg, #FF4D4D 0%, #FF7A3D 50%, #FF6B81 100%);
+  --redsun-gradient-hover: linear-gradient(135deg, #FF2E2E 0%, #FF6B81 50%, #FF7A3D 100%);
+  
+  --redsun-radius-sm: 12px;
+  --redsun-radius-md: 20px;
+  --redsun-radius-lg: 28px;
+  --redsun-radius-xl: 36px;
+  --redsun-easing: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* RedSun Specific Keyframe Animations */
+@keyframes redsunMarquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes redsunFloat {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(0.8deg); }
+}
+
+@keyframes redsunPulseGlow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+    filter: blur(80px);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.08);
+    filter: blur(95px);
+  }
+}
+
+@keyframes lusionAmbientA {
+  0%, 100% { transform: translate3d(-3%, -2%, 0) scale(0.92) rotate(-8deg); }
+  50% { transform: translate3d(9%, 7%, 0) scale(1.12) rotate(8deg); }
+}
+
+@keyframes lusionAmbientB {
+  0%, 100% { transform: translate3d(4%, 5%, 0) scale(1.08) rotate(10deg); }
+  50% { transform: translate3d(-8%, -5%, 0) scale(0.9) rotate(-7deg); }
+}
+
+@keyframes lusionParticleDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(0.9); opacity: 0.35; }
+  50% { transform: translate3d(18px, -30px, 0) scale(1.15); opacity: 0.85; }
+}
+
+@keyframes lusionProgress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes lusionMeshDrift {
+  0%, 100% { transform: translate3d(-3%, -2%, 0) scale(1.04); opacity: .48; }
+  50% { transform: translate3d(4%, 3%, 0) scale(1.13); opacity: .72; }
+}
+
+@keyframes lusionOrbitSpin {
+  from { transform: translate3d(-50%, -50%, 0) rotate(0deg); }
+  to { transform: translate3d(-50%, -50%, 0) rotate(360deg); }
+}
+
+@keyframes lusionGridBreathe {
+  0%, 100% { transform: perspective(700px) rotateX(66deg) translate3d(0, 2%, 0); opacity: .14; }
+  50% { transform: perspective(700px) rotateX(66deg) translate3d(0, -4%, 0); opacity: .25; }
+}
+
+@keyframes lusionCometFlight {
+  0%, 68% { transform: translate3d(-18vw, 0, 0) rotate(-18deg) scaleX(.25); opacity: 0; }
+  72% { opacity: .7; }
+  88% { opacity: .18; }
+  100% { transform: translate3d(118vw, -34vh, 0) rotate(-18deg) scaleX(1); opacity: 0; }
+}
+
+@keyframes lusionSculptureMorph {
+  0%, 100% { transform: translate3d(-50%, -50%, 0) rotate(-8deg) scale(.92); border-radius: 48% 52% 58% 42% / 42% 46% 54% 58%; }
+  33% { transform: translate3d(-50%, -52%, 0) rotate(5deg) scale(1.06); border-radius: 58% 42% 43% 57% / 54% 60% 40% 46%; }
+  66% { transform: translate3d(-52%, -48%, 0) rotate(12deg) scale(.98); border-radius: 42% 58% 54% 46% / 61% 39% 58% 42%; }
+}
+
+@keyframes lusionRingPulse {
+  0%, 100% { transform: scale(.82) rotate(0); opacity: .18; }
+  50% { transform: scale(1.12) rotate(180deg); opacity: .5; }
+}
+
+@keyframes lusionScrollPulse {
+  0% { transform: scaleX(.2); opacity: .35; }
+  60%, 100% { transform: scaleX(1); opacity: 1; }
+}
+
+.lusion-landing {
+  isolation: isolate;
+  scroll-behavior: smooth;
+  --premium-ease: cubic-bezier(.16, 1, .3, 1);
+}
+.lusion-page-progress {
+  transform: scaleX(var(--landing-scroll-progress, 0));
+  background: linear-gradient(90deg, #ff2e2e, #ff7a3d 55%, #ff6b81);
+  box-shadow: 0 0 14px rgba(255,77,77,.65);
+  transition: transform 80ms linear;
+}
+.lusion-scroll-depth {
+  background:
+    radial-gradient(circle at 12% 25%, rgba(255,77,77,.08), transparent 22%),
+    radial-gradient(circle at 88% 62%, rgba(255,122,61,.07), transparent 24%);
+  transform: translate3d(0, calc(var(--landing-scroll-progress, 0) * -120px), 0) scale(1.08);
+  will-change: transform;
+}
+.lusion-ambient { will-change: transform; contain: strict; }
+.lusion-ambient-a { animation: lusionAmbientA 18s ease-in-out infinite; }
+.lusion-ambient-b { animation: lusionAmbientB 22s ease-in-out infinite; }
+.lusion-film-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E");
+}
+.lusion-mesh-wave {
+  background:
+    radial-gradient(ellipse at 20% 30%, rgba(255,77,77,.12), transparent 34%),
+    radial-gradient(ellipse at 76% 66%, rgba(255,122,61,.10), transparent 37%),
+    radial-gradient(ellipse at 52% 18%, rgba(255,107,129,.07), transparent 30%);
+  will-change: transform, opacity;
+  animation: lusionMeshDrift 16s ease-in-out infinite;
+}
+.lusion-orbit-field {
+  width: min(90vw, 1040px); aspect-ratio: 1; border-radius: 50%; opacity: .22;
+  background: conic-gradient(from 40deg, transparent 0 18%, rgba(255,77,77,.3) 23%, transparent 29% 57%, rgba(255,122,61,.22) 63%, transparent 70%);
+  mask-image: radial-gradient(circle, transparent 0 42%, #000 48% 49%, transparent 50% 60%, #000 61% 61.5%, transparent 63%);
+  animation: lusionOrbitSpin 42s linear infinite;
+  will-change: transform;
+}
+.lusion-depth-grid {
+  transform-origin: center bottom;
+  background-image:
+    linear-gradient(rgba(255,122,61,.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,77,77,.1) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(to bottom, transparent, #000 38%, transparent 92%);
+  animation: lusionGridBreathe 10s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.lusion-comet {
+  position: absolute; left: 0; width: 120px; height: 1px; opacity: 0;
+  border-radius: 999px; transform-origin: left center;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), rgba(255,122,61,.1));
+  box-shadow: 0 0 12px rgba(255,122,61,.35);
+  animation: lusionCometFlight 14s linear infinite;
+  will-change: transform, opacity;
+}
+.lusion-comet-a { top: 72%; animation-delay: -2s; }
+.lusion-comet-b { top: 48%; animation-delay: -8s; animation-duration: 18s; }
+.lusion-comet-c { top: 88%; animation-delay: -13s; animation-duration: 22s; }
+.lusion-intro-orb {
+  position: absolute; width: min(62vw, 680px); aspect-ratio: 1; border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, rgba(255,255,255,.28), rgba(255,77,77,.17) 18%, rgba(255,122,61,.08) 42%, transparent 68%);
+  filter: blur(24px); animation: lusionAmbientA 4s ease-in-out infinite;
+}
+.lusion-intro-progress {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+  transform-origin: left; background: linear-gradient(90deg, #ff4d4d, #ff7a3d, #ff6b81);
+  animation: lusionProgress 1.2s cubic-bezier(.16,1,.3,1) forwards;
+}
+.lusion-hero-sculpture {
+  position: absolute; left: 50%; top: 40%; width: min(72vw, 760px); aspect-ratio: 1;
+  transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; opacity: .62;
+  background: radial-gradient(circle at 50% 48%, rgba(255,122,61,.13), rgba(255,77,77,.05) 34%, transparent 68%);
+  filter: saturate(1.15); z-index: -1;
+}
+.lusion-sculpture-core {
+  position: absolute; left: 50%; top: 50%; width: 42%; aspect-ratio: 1;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,255,255,.92), transparent 7%),
+    radial-gradient(circle at 62% 32%, rgba(255,194,160,.76), transparent 13%),
+    radial-gradient(circle at 48% 55%, rgba(255,77,77,.82), rgba(255,122,61,.28) 38%, rgba(255,107,129,.08) 64%, transparent 72%);
+  box-shadow: inset -30px -20px 60px rgba(0,0,0,.48), 0 0 90px rgba(255,77,77,.3);
+  filter: blur(.2px) saturate(1.18);
+  animation: lusionSculptureMorph 12s ease-in-out infinite;
+  will-change: transform, border-radius;
+}
+.lusion-sculpture-ring {
+  position: absolute; inset: 20%; border-radius: 50%; border: 1px solid rgba(255,122,61,.28);
+  box-shadow: inset 0 0 45px rgba(255,77,77,.08), 0 0 32px rgba(255,122,61,.08);
+  animation: lusionRingPulse 10s ease-in-out infinite;
+}
+.lusion-sculpture-ring-b { inset: 11%; animation-delay: -5s; animation-direction: reverse; border-color: rgba(255,255,255,.11); }
+.lusion-campaign-hero {
+  width: min(94vw, 1380px);
+  margin-inline: auto;
+  font-size: clamp(3.35rem, 10.2vw, 9.6rem);
+  line-height: .78;
+  letter-spacing: -.065em;
+  text-wrap: balance;
+  text-shadow: 0 24px 80px rgba(0,0,0,.72);
+}
+.lusion-hero-word { position: relative; display: block; }
+.lusion-hero-word-top {
+  color: rgba(255,255,255,.98);
+  -webkit-text-stroke: 1px rgba(255,255,255,.12);
+}
+.lusion-hero-word-bottom {
+  padding-right: .14em;
+  filter: drop-shadow(0 16px 35px rgba(255,77,77,.2));
+}
+.lusion-ai-mark {
+  display: inline-flex; vertical-align: top; margin-left: .16em; margin-top: .08em;
+  padding: .42em .52em; border-radius: 999px; border: 1px solid rgba(255,122,61,.5);
+  background: rgba(20,8,7,.72); color: #ff9a68; -webkit-text-fill-color: #ff9a68;
+  font-size: .1em; line-height: 1; letter-spacing: .12em; box-shadow: 0 0 30px rgba(255,77,77,.18);
+}
+
+.lusion-landing section {
+  content-visibility: auto;
+  contain-intrinsic-size: 700px;
+}
+.lusion-landing .redsun-card,
+.lusion-landing button,
+.lusion-landing a {
+  transform: translateZ(0);
+}
+.lusion-landing .redsun-card {
+  transition-duration: 280ms;
+  transition-timing-function: var(--premium-ease);
+}
+.lusion-landing button,
+.lusion-landing a {
+  transition-timing-function: var(--premium-ease);
+}
+.lusion-landing img {
+  content-visibility: auto;
+}
+.lusion-scroll-line {
+  display: inline-block; width: 54px; height: 1px; transform-origin: left;
+  background: linear-gradient(90deg, #ff7a3d, rgba(255,255,255,.75));
+  animation: lusionScrollPulse 1.8s cubic-bezier(.16,1,.3,1) infinite;
+}
+.lusion-particle { position: absolute; border-radius: 999px; will-change: transform; animation: lusionParticleDrift 7s ease-in-out infinite; }
+.lusion-particle-a { width: 9px; height: 9px; left: 18%; top: 36%; background: #ff7a3d; box-shadow: 0 0 34px 10px rgba(255,122,61,.34); }
+.lusion-particle-b { width: 6px; height: 6px; right: 20%; top: 28%; background: #ff6b81; box-shadow: 0 0 30px 9px rgba(255,107,129,.3); animation-delay: -2.4s; }
+.lusion-particle-c { width: 11px; height: 11px; left: 48%; bottom: 16%; background: #fff; box-shadow: 0 0 38px 11px rgba(255,255,255,.2); animation-delay: -4.8s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lusion-ambient, .lusion-particle, .lusion-intro-orb, .lusion-intro-progress,
+  .lusion-mesh-wave, .lusion-orbit-field, .lusion-depth-grid, .lusion-comet,
+  .lusion-sculpture-core, .lusion-sculpture-ring, .lusion-scroll-line,
+  .lusion-page-progress, .lusion-scroll-depth,
+  .animate-redsun-marquee, .animate-redsun-float, .animate-redsun-glow {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* RedSun Utility Classes */
+.bg-redsun-bg {
+  background-color: var(--redsun-bg);
+}
+
+.bg-redsun-surface {
+  background-color: var(--redsun-surface);
+}
+
+.bg-redsun-surface-light {
+  background-color: var(--redsun-surface-light);
+}
+
+.text-redsun-gradient {
+  background: var(--redsun-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bg-redsun-gradient {
+  background: var(--redsun-gradient);
+}
+
+.bg-redsun-gradient-hover:hover {
+  background: var(--redsun-gradient-hover);
+}
+
+.border-redsun {
+  border-color: var(--redsun-border);
+}
+
+.border-redsun-hover:hover {
+  border-color: var(--redsun-border-hover);
+}
+
+.redsun-glow-coral {
+  box-shadow: 0 0 50px -10px rgba(255, 77, 77, 0.35);
+}
+
+.redsun-card {
+  background-color: rgba(17, 17, 17, 0.85);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--redsun-radius-md);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.redsun-card:hover {
+  border-color: rgba(255, 77, 77, 0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -15px rgba(255, 77, 77, 0.15);
+}
+
+.redsun-btn-primary {
+  background: var(--redsun-gradient);
+  color: #FFFFFF;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 14px 32px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 10px 30px -5px rgba(255, 77, 77, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.redsun-btn-primary:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 16px 40px -5px rgba(255, 77, 77, 0.5);
+  filter: brightness(1.1);
+}
+
+.redsun-btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 14px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.redsun-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  color: #FFFFFF;
+}
+
+.animate-redsun-marquee {
+  display: flex;
+  width: max-content;
+  animation: redsunMarquee 35s linear infinite;
+}
+
+.animate-redsun-marquee:hover {
+  animation-play-state: paused;
+}
+
+.animate-redsun-float {
+  animation: redsunFloat 6s ease-in-out infinite;
+}
+
+.animate-redsun-glow {
+  animation: redsunPulseGlow 8s ease-in-out infinite;
+}
+
+.text-redsun-hero {
+  font-size: clamp(2.2rem, 5.2vw, 5.2rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+}
+
+.text-redsun-h2 {
+  font-size: clamp(1.8rem, 3.5vw, 3.2rem);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+/* ==========================================================================
+   PROFESSIONAL DARK SLEEK SCROLLBAR SUITE (Universal & WebKit/Firefox)
+   ========================================================================== */
+
+/* Universal standard CSS Scrollbars (Firefox, Chrome 121+, Edge, Safari) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(6, 182, 212, 0.45) #020712;
+}
+
+/* Universal WebKit Scrollbars (Chrome, Edge, Safari, Opera) */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #020712;
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.35);
+  border-radius: 9999px;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.7);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: rgba(16, 185, 129, 0.85);
+}
+
+*::-webkit-scrollbar-corner {
+  background: #020712;
+}
+
+/* Remove default white arrow buttons on Windows/Edge/Chrome */
+*::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Custom dedicated utility classes */
+.custom-scrollbar,
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(6, 182, 212, 0.45) #020712;
+}
+
+.custom-scrollbar::-webkit-scrollbar,
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #020712;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.4);
+  border-radius: 9999px;
+  border: 1px solid rgba(6, 182, 212, 0.25);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.75);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.custom-scrollbar::-webkit-scrollbar-button,
+.scrollbar-thin::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Leaflet map container fix */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+/* ==========================================================================
+   HIGH CONTRAST & WCAG AA / AAA ACCESSIBILITY SUITE
+   ========================================================================== */
+html.high-contrast,
+body.high-contrast {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+html.high-contrast * {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+html.high-contrast .text-slate-400,
+html.high-contrast .text-slate-500,
+html.high-contrast .text-slate-600 {
+  color: #e2e8f0 !important;
+}
+
+html.high-contrast .text-slate-300,
+html.high-contrast .text-slate-200 {
+  color: #ffffff !important;
+}
+
+html.high-contrast .text-cyan-400,
+html.high-contrast .text-cyan-300,
+html.high-contrast .text-cyan-200 {
+  color: #38bdf8 !important;
+  font-weight: 700;
+}
+
+html.high-contrast .text-emerald-400,
+html.high-contrast .text-emerald-300 {
+  color: #4ade80 !important;
+  font-weight: 700;
+}
+
+html.high-contrast .text-amber-400,
+html.high-contrast .text-amber-300,
+html.high-contrast .text-yellow-400 {
+  color: #facc15 !important;
+  font-weight: 700;
+}
+
+html.high-contrast .text-red-400,
+html.high-contrast .text-red-300 {
+  color: #f87171 !important;
+  font-weight: 700;
+}
+
+/* High contrast background overrides for cards and panels */
+html.high-contrast .bg-\[\#030712\],
+html.high-contrast .bg-\[\#040e21\],
+html.high-contrast .bg-\[\#020817\],
+html.high-contrast .bg-\[\#01040a\],
+html.high-contrast .bg-\[\#07172e\],
+html.high-contrast .bg-\[\#030e1f\],
+html.high-contrast .bg-\[\#030b19\],
+html.high-contrast .bg-\[\#080808\],
+html.high-contrast .bg-\[\#111111\],
+html.high-contrast .glass-panel-cyber,
+html.high-contrast .glass-panel-teal,
+html.high-contrast .glass-panel-cyan,
+html.high-contrast .redsun-card {
+  background: #09090b !important;
+  border: 1.5px solid #ffffff !important;
+}
+
+/* Inputs & Form Controls in High Contrast */
+html.high-contrast input,
+html.high-contrast select,
+html.high-contrast textarea {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #38bdf8 !important;
+  font-weight: 600 !important;
+}
+
+html.high-contrast input:focus,
+html.high-contrast select:focus,
+html.high-contrast textarea:focus {
+  outline: 3px solid #facc15 !important;
+  outline-offset: 2px !important;
+  border-color: #ffffff !important;
+}
+
+/* High contrast buttons */
+html.high-contrast button {
+  border: 1.5px solid rgba(255, 255, 255, 0.7) !important;
+}
+
+html.high-contrast button:focus-visible {
+  outline: 3px solid #facc15 !important;
+  outline-offset: 3px !important;
+}
+
+/* Enhanced Focus Rings class */
+html.enhanced-focus *:focus-visible {
+  outline: 3px solid #facc15 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 5px rgba(250, 204, 21, 0.35) !important;
+}
+
+/* Underline Links class */
+html.underline-links a,
+html.underline-links button.link-style,
+html.underline-links [role="link"] {
+  text-decoration: underline !important;
+  text-underline-offset: 3px !important;
+}
+
+/* Font scale modes */
+html.font-scale-lg {
+  font-size: 112.5% !important;
+}
+
+html.font-scale-xl {
+  font-size: 125% !important;
+}
+
+/* Reduced Motion class */
+html.reduce-motion *,
+html.reduce-motion ::before,
+html.reduce-motion ::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Accessibility: Prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

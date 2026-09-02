@@ -1,0 +1,6 @@
+{
+  "name": "Campaña Ganadora AI",
+  "description": "Plataforma integral de gestión electoral, territorial, análisis estratégico y panel administrativo global de superusuario multi-tenant con IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
