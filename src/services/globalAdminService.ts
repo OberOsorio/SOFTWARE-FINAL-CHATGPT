@@ -460,7 +460,59 @@ export class GlobalAdminService {
   }
 
   static async deleteCampaignAndUsers(id: string): Promise<void> {
-    await this.request(`/campaigns/${id}`, { method: 'DELETE' });
+    const token = await this.getValidSupabaseToken();
+    let pendingUserIds: string[] | undefined;
+    let pendingToken: string | undefined;
+    let deletedUsers = 0;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetch(`/api/supabase-admin/campaigns/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ deleteLinkedUsers: true, pendingUserIds, pendingToken })
+      });
+
+      const rawText = await response.text();
+      let result: any;
+      try {
+        result = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        const contentType = response.headers.get('content-type') || '';
+        const looksLikeHtml = contentType.includes('text/html') || /^\s*<!doctype\s+html/i.test(rawText);
+        if (looksLikeHtml) {
+          throw new Error('El servicio administrativo no está disponible en este despliegue.');
+        }
+        throw new Error('El servicio administrativo devolvió una respuesta no válida.');
+      }
+
+      deletedUsers += Number.isFinite(Number(result?.deletedUsers))
+        ? Math.max(0, Number(result.deletedUsers))
+        : 0;
+      if (response.ok && result?.success === true) return;
+
+      const retryIds = Array.isArray(result?.pendingUserIds)
+        ? result.pendingUserIds.filter((value: unknown): value is string => typeof value === 'string')
+        : [];
+      if (
+        attempt === 0 &&
+        result?.retryable === true &&
+        retryIds.length > 0 &&
+        typeof result?.pendingToken === 'string'
+      ) {
+        pendingUserIds = retryIds;
+        pendingToken = result.pendingToken;
+        continue;
+      }
+
+      const progress = result?.retryable && deletedUsers > 0
+        ? ` Se retiraron ${deletedUsers} cuenta(s); puedes reintentar de forma segura.`
+        : '';
+      throw new Error(
+        `${result?.error || 'No fue posible eliminar la campaña y sus usuarios vinculados.'}${progress}`
+      );
+    }
+
+    throw new Error('No fue posible reanudar la eliminación de forma segura.');
   }
 
   // 6. Modules
