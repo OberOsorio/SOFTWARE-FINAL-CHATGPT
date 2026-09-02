@@ -95,6 +95,13 @@ export class GlobalAdminService {
         customErr.status = 429;
         throw customErr;
       }
+      // Cloudflare Pages serves index.html for unknown routes. Never expose that
+      // document (or any proxy-generated HTML) as an application error.
+      const contentType = response.headers.get('content-type') || '';
+      const looksLikeHtml = contentType.includes('text/html') || /^\s*<!doctype\s+html/i.test(rawText);
+      if (looksLikeHtml) {
+        throw new Error('El servicio administrativo no está disponible en este despliegue.');
+      }
       throw new Error(rawText || `Error HTTP ${response.status}: ${response.statusText}`);
     }
 
