@@ -180,6 +180,15 @@ const [isLoading, setIsLoading] = useState(false);
                 ? 'AUTH_NETWORK_ERROR'
                 : 'AUTH_SESSION_ERROR';
         console.warn('Authentication rejected', { code, source: 'campaign-login' });
+        if (code === 'AUTH_EMAIL_NOT_CONFIRMED') {
+          throw new Error('Tu correo está pendiente de confirmación. Usa “¿Olvidaste tu contraseña?” para activar el acceso de forma segura.');
+        }
+        if (code === 'AUTH_RATE_LIMIT') {
+          throw new Error('Demasiados intentos. Espera unos minutos antes de volver a intentar.');
+        }
+        if (code === 'AUTH_NETWORK_ERROR') {
+          throw new Error('No fue posible conectar con el servicio de acceso. Intenta nuevamente.');
+        }
         throw new Error('Correo o contraseña incorrectos.');
       }
 
@@ -193,7 +202,7 @@ const [isLoading, setIsLoading] = useState(false);
         await supabase.auth.signOut();
         throw new Error('Tu cuenta no tiene un perfil autorizado en el sistema.');
       }
-      if (profile.status !== 'ACTIVE') {
+      if (!['ACTIVE', 'ACTIVO'].includes(String(profile.status || '').toUpperCase())) {
         await supabase.auth.signOut();
         throw new Error('Tu cuenta está inactiva o suspendida.');
       }
