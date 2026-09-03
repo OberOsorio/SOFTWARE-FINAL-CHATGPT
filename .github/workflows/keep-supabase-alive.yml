@@ -1,0 +1,42 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Se ejecuta cada 3 días a las 12:00 UTC
+    # Supabase pausa proyectos inactivos tras 7 días, esto lo previene
+    - cron: '0 12 */3 * *'
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  ping-supabase:
+    name: Ping Supabase Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Supabase Auth Health
+        run: |
+          echo "🏓 Haciendo ping a Supabase..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://bzpwataxlywstviqttqb.supabase.co/auth/v1/health" \
+            -H "apikey: sb_publishable_VJ7kpfyV-ZiZ0y6yWWQ1Uw_C-VPrfYe")
+
+          echo "📡 Código de respuesta: $STATUS"
+
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Supabase está activo y respondiendo correctamente."
+          else
+            echo "⚠️ Supabase respondió con código: $STATUS"
+            exit 1
+          fi
+
+      - name: Ping Supabase REST API
+        run: |
+          echo "🏓 Verificando REST API..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://bzpwataxlywstviqttqb.supabase.co/rest/v1/" \
+            -H "apikey: sb_publishable_VJ7kpfyV-ZiZ0y6yWWQ1Uw_C-VPrfYe" \
+            -H "Authorization: Bearer sb_publishable_VJ7kpfyV-ZiZ0y6yWWQ1Uw_C-VPrfYe")
+
+          echo "📡 Código de respuesta REST: $STATUS"
+          echo "✅ Ping completado. Proyecto Supabase mantenido activo."
