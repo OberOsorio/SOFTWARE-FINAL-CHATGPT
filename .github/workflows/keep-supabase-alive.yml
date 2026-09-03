@@ -18,8 +18,8 @@ jobs:
         run: |
           echo "🏓 Haciendo ping a Supabase..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://bzpwataxlywstviqttqb.supabase.co/auth/v1/health" \
-            -H "apikey: sb_publishable_VJ7kpfyV-ZiZ0y6yWWQ1Uw_C-VPrfYe")
+            "https://uvjpcegnynajhrxrwpxz.supabase.co/auth/v1/health" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2anBjZWdueW5hamhyeHJ3cHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5NzY1MzMsImV4cCI6MjEwMzU1MjUzM30.XMsle-p3BUlxLXLqgL34sZeN5tzTGtH2tNtQcCkTvaQ")
 
           echo "📡 Código de respuesta: $STATUS"
 
@@ -34,9 +34,9 @@ jobs:
         run: |
           echo "🏓 Verificando REST API..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://bzpwataxlywstviqttqb.supabase.co/rest/v1/" \
-            -H "apikey: sb_publishable_VJ7kpfyV-ZiZ0y6yWWQ1Uw_C-VPrfYe" \
-            -H "Authorization: Bearer sb_publishable_VJ7kpfyV-ZiZ0y6yWWQ1Uw_C-VPrfYe")
+            "https://uvjpcegnynajhrxrwpxz.supabase.co/rest/v1/" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2anBjZWdueW5hamhyeHJ3cHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5NzY1MzMsImV4cCI6MjEwMzU1MjUzM30.XMsle-p3BUlxLXLqgL34sZeN5tzTGtH2tNtQcCkTvaQ" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2anBjZWdueW5hamhyeHJ3cHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5NzY1MzMsImV4cCI6MjEwMzU1MjUzM30.XMsle-p3BUlxLXLqgL34sZeN5tzTGtH2tNtQcCkTvaQ")
 
           echo "📡 Código de respuesta REST: $STATUS"
           echo "✅ Ping completado. Proyecto Supabase mantenido activo."
