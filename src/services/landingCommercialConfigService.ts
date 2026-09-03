@@ -96,6 +96,7 @@ export const DEFAULT_LANDING_COMMERCIAL_CONFIG: LandingCommercialConfig = {
 };
 
 const LOCAL_FALLBACK_KEY = 'landing_commercial_config_v1';
+export const LANDING_COMMERCIAL_CONFIG_EVENT = 'landing-commercial-config-updated';
 
 const plansOrDefaults = (plans: unknown): LandingPlan[] =>
   Array.isArray(plans) && plans.length > 0
@@ -120,47 +121,57 @@ const saveLocalFallback = (config: LandingCommercialConfig) => {
   localStorage.setItem(LOCAL_FALLBACK_KEY, JSON.stringify(config));
 };
 
+const notifyConfigUpdated = () => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(LANDING_COMMERCIAL_CONFIG_EVENT));
+};
+
+const normalizeConfig = (config: any): LandingCommercialConfig => ({
+  plans: plansOrDefaults(config?.plans),
+  contact: { ...DEFAULT_LANDING_COMMERCIAL_CONFIG.contact, ...(config?.contact || {}) },
+});
+
 export const LandingCommercialConfigService = {
   async get(): Promise<LandingCommercialConfig> {
     try {
-      const response = await fetch('/api/global-admin/landing-commercial/public');
+      const response = await fetch('/api/global-admin/landing-commercial/public', { cache: 'no-store' });
       if (response.ok) {
         const payload = await response.json();
         const remote = payload?.config;
-        if (remote) return {
-          plans: plansOrDefaults(remote.plans),
-          contact: { ...DEFAULT_LANDING_COMMERCIAL_CONFIG.contact, ...(remote.contact || {}) },
-        };
+        const hasPublishedPlans = Array.isArray(remote?.plans) && remote.plans.length > 0;
+        if (payload?.persisted === true || hasPublishedPlans) {
+          const normalized = normalizeConfig(remote);
+          saveLocalFallback(normalized);
+          return normalized;
+        }
       }
     } catch { /* Continuar con compatibilidad Supabase. */ }
-    const localConfig = readLocalFallback();
-    if (localConfig) return localConfig;
-    const { data, error } = await supabase
-      .from('landing_commercial_config')
-      .select('plans,contact')
-      .eq('id', 'main')
-      .maybeSingle();
-    if (error) {
-      const message = String(error.message || '');
-      if (message.includes('landing_commercial_config') || message.includes('schema cache')) {
-        return DEFAULT_LANDING_COMMERCIAL_CONFIG;
+
+    try {
+      const { data, error } = await supabase
+        .from('landing_commercial_config')
+        .select('plans,contact')
+        .eq('id', 'main')
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        const normalized = normalizeConfig(data);
+        saveLocalFallback(normalized);
+        return normalized;
       }
-      throw error;
-    }
-    if (!data) return DEFAULT_LANDING_COMMERCIAL_CONFIG;
-    return {
-      plans: plansOrDefaults(data.plans),
-      contact: { ...DEFAULT_LANDING_COMMERCIAL_CONFIG.contact, ...(data.contact || {}) },
-    };
+    } catch { /* Usar la copia local solo si no existe una publicación remota accesible. */ }
+
+    return readLocalFallback() || DEFAULT_LANDING_COMMERCIAL_CONFIG;
   },
 
   async save(config: LandingCommercialConfig): Promise<void> {
     try {
       await GlobalAdminService.updateLandingCommercialConfig(config);
       saveLocalFallback(config);
+      notifyConfigUpdated();
       return;
     } catch { /* Intentar el almacenamiento de base de datos. */ }
-    try {
+      try {
       const { data: auth } = await supabase.auth.getUser();
       const { error } = await supabase.from('landing_commercial_config').upsert({
         id: 'main', plans: config.plans, contact: config.contact,
@@ -168,10 +179,13 @@ export const LandingCommercialConfigService = {
       }, { onConflict: 'id' });
       if (error) throw error;
       saveLocalFallback(config);
+      notifyConfigUpdated();
     } catch {
-      // Compatibilidad temporal para despliegues cuyo backend o migración aún
-      // no se ha actualizado. Nunca se expone HTML o SQL al administrador.
+      // Se conserva como borrador local, pero no se informa como publicación
+      // porque otros visitantes no podrían ver estos cambios.
       saveLocalFallback(config);
+      notifyConfigUpdated();
+      throw new Error('Los cambios quedaron guardados como borrador en este navegador, pero no pudieron publicarse. Verifica la conexión con Supabase e inténtalo nuevamente.');
     }
   },
 };

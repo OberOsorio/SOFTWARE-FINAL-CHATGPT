@@ -9,7 +9,11 @@ import {
 import { CampanaGanadoraDetailModal } from './common/CampanaGanadoraDetailModal';
 import { BallotBrainIcon } from './common/CampaignLogoIcon';
 import { LandingParticleNetwork } from './landing/LandingParticleNetwork';
-import { LandingCommercialConfigService, DEFAULT_LANDING_COMMERCIAL_CONFIG } from '../services/landingCommercialConfigService';
+import {
+  LandingCommercialConfigService,
+  DEFAULT_LANDING_COMMERCIAL_CONFIG,
+  LANDING_COMMERCIAL_CONFIG_EVENT,
+} from '../services/landingCommercialConfigService';
 import {
   Sparkles,
   ArrowRight,
@@ -187,9 +191,28 @@ export const RedSunBeeCampaignLanding: React.FC<RedSunBeeCampaignLandingProps> =
   const [registeredPanelUrl, setRegisteredPanelUrl] = useState<string>('');
 
   useEffect(() => {
-    LandingCommercialConfigService.get().then(setCommercialConfig).catch(() => {
-      setCommercialConfig(DEFAULT_LANDING_COMMERCIAL_CONFIG);
-    });
+    let active = true;
+    const loadCommercialConfig = () => {
+      LandingCommercialConfigService.get().then((config) => {
+        if (active) setCommercialConfig(config);
+      }).catch(() => {
+        if (active) setCommercialConfig(DEFAULT_LANDING_COMMERCIAL_CONFIG);
+      });
+    };
+
+    loadCommercialConfig();
+    window.addEventListener('pageshow', loadCommercialConfig);
+    window.addEventListener('focus', loadCommercialConfig);
+    window.addEventListener('storage', loadCommercialConfig);
+    window.addEventListener(LANDING_COMMERCIAL_CONFIG_EVENT, loadCommercialConfig);
+
+    return () => {
+      active = false;
+      window.removeEventListener('pageshow', loadCommercialConfig);
+      window.removeEventListener('focus', loadCommercialConfig);
+      window.removeEventListener('storage', loadCommercialConfig);
+      window.removeEventListener(LANDING_COMMERCIAL_CONFIG_EVENT, loadCommercialConfig);
+    };
   }, []);
 
   // Prevent background scroll when mobile drawer is open
